@@ -524,5 +524,50 @@
 })();
 </script>
 
+<!-- Code block line-by-line animation -->
+<script>
+(function () {
+  var blocks = document.querySelectorAll('.code-block');
+
+  blocks.forEach(function (block) {
+    var pre = block.querySelector('pre');
+    if (!pre) return;
+
+    // Split content into lines, preserving HTML
+    var html = pre.innerHTML;
+    var lines = html.split('\n');
+
+    // Wrap each line in a span
+    pre.innerHTML = lines.map(function (line, i) {
+      return '<span class="code-line" style="opacity:0;transform:translateY(8px);transition:opacity 0.4s ease,transform 0.4s ease;display:block;transition-delay:' + (i * 80) + 'ms">' + line + '</span>';
+    }).join('');
+
+    // Add blinking cursor to last line
+    var lastLine = pre.querySelector('.code-line:last-child');
+    if (lastLine) {
+      lastLine.innerHTML += '<span class="code-cursor"></span>';
+    }
+  });
+
+  // Intersection Observer to trigger animation
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var lines = entry.target.querySelectorAll('.code-line');
+        lines.forEach(function (line) {
+          line.style.opacity = '1';
+          line.style.transform = 'translateY(0)';
+        });
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.2 });
+
+  blocks.forEach(function (block) {
+    observer.observe(block);
+  });
+})();
+</script>
+
 </body>
 </html>
