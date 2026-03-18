@@ -28,7 +28,14 @@ export function AppShell({
     <div className="dashboard-shell">
       <aside className="dashboard-rail">
         <div className="rail-header">
-          <p className="eyebrow">Vervet Network</p>
+          <div className="rail-brand">
+            <svg width="18" height="22" viewBox="0 0 22 28" fill="none">
+              <path d="M11 1L21 8.5L11 27L1 8.5L11 1Z" stroke="#34d399" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M1 8.5H21" stroke="#34d399" strokeWidth="1.5"/>
+              <path d="M11 1L7 8.5L11 27L15 8.5L11 1Z" stroke="#34d399" strokeWidth="1.5" strokeLinejoin="round"/>
+            </svg>
+            <p className="eyebrow">Vervet Network</p>
+          </div>
           <h1>Platform Dashboard</h1>
           <div className="chip-row">
             <PartnerCapabilityBadge

@@ -18,17 +18,18 @@ export default async function HomePage() {
       <div className="login-brand">
         <div className="login-brand-inner">
           <div className="login-logo">
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M16 2L28 8V24L16 30L4 24V8L16 2Z" fill="url(#logo-gradient)" fillOpacity="0.15" stroke="url(#logo-gradient)" strokeWidth="1.5"/>
-              <path d="M10 12L16 22L22 12" stroke="url(#logo-gradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg width="22" height="28" viewBox="0 0 22 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11 1L21 8.5L11 27L1 8.5L11 1Z" stroke="url(#logo-gradient)" strokeWidth="1.5" strokeLinejoin="round"/>
+              <path d="M1 8.5H21" stroke="url(#logo-gradient)" strokeWidth="1.5"/>
+              <path d="M11 1L7 8.5L11 27L15 8.5L11 1Z" stroke="url(#logo-gradient)" strokeWidth="1.5" strokeLinejoin="round"/>
               <defs>
-                <linearGradient id="logo-gradient" x1="4" y1="2" x2="28" y2="30" gradientUnits="userSpaceOnUse">
+                <linearGradient id="logo-gradient" x1="1" y1="1" x2="21" y2="27" gradientUnits="userSpaceOnUse">
                   <stop stopColor="#34d399"/>
                   <stop offset="1" stopColor="#06b6d4"/>
                 </linearGradient>
               </defs>
             </svg>
-            <span>Vervet</span>
+            <span>vervet</span>
           </div>
 
           <div className="login-brand-content">
