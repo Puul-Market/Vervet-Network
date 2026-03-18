@@ -529,6 +529,7 @@
 (function () {
   var blocks = document.querySelectorAll('.code-block');
   var animated = [];
+  var CURSOR = '<span class="code-cursor"></span>';
 
   // Parse HTML into tokens: tags (inserted whole) and characters (typed one by one)
   function tokenize(html) {
@@ -538,21 +539,21 @@
       if (html[i] === '<') {
         var end = html.indexOf('>', i);
         if (end !== -1) {
-          tokens.push(html.substring(i, end + 1));
+          tokens.push({ text: html.substring(i, end + 1), isTag: true });
           i = end + 1;
         } else {
-          tokens.push(html[i]);
+          tokens.push({ text: html[i], isTag: false });
           i++;
         }
       } else {
-        tokens.push(html[i]);
+        tokens.push({ text: html[i], isTag: false });
         i++;
       }
     }
     return tokens;
   }
 
-  // Prepare each block: save HTML, clear, add cursor
+  // Prepare each block
   blocks.forEach(function (block) {
     var pre = block.querySelector('pre');
     if (!pre) return;
@@ -560,14 +561,18 @@
     var fullHTML = pre.innerHTML;
     var tokens = tokenize(fullHTML);
 
-    pre.innerHTML = '<span class="code-cursor"></span>';
-    pre.style.minHeight = pre.scrollHeight + 'px';
+    // Measure height before clearing to prevent layout shift
+    var h = pre.offsetHeight;
+    pre.innerHTML = CURSOR;
+    pre.style.minHeight = h + 'px';
 
     animated.push({
       el: block,
       pre: pre,
+      fullHTML: fullHTML,
       tokens: tokens,
       index: 0,
+      built: '',
       started: false
     });
   });
@@ -575,34 +580,29 @@
   function typeBlock(item, delay) {
     setTimeout(function () {
       item.started = true;
-      var speed = 12; // ms per character
+      var speed = 14;
 
       function typeNext() {
+        // Skip through tags instantly, stop at next visible character
+        while (item.index < item.tokens.length && item.tokens[item.index].isTag) {
+          item.built += item.tokens[item.index].text;
+          item.index++;
+        }
+
         if (item.index >= item.tokens.length) {
-          // Done — remove cursor
-          var cursor = item.pre.querySelector('.code-cursor');
-          if (cursor) {
-            setTimeout(function () { cursor.style.display = 'none'; }, 1500);
-          }
+          // Done typing — show final HTML without cursor
+          item.pre.innerHTML = item.fullHTML;
           return;
         }
 
-        var token = item.tokens[item.index];
+        // Add next visible character
+        item.built += item.tokens[item.index].text;
         item.index++;
 
-        // Insert token before cursor
-        var cursor = item.pre.querySelector('.code-cursor');
-        if (cursor) {
-          cursor.insertAdjacentHTML('beforebegin', token);
-        }
+        // Render partial HTML + cursor
+        item.pre.innerHTML = item.built + CURSOR;
 
-        // Tags get inserted instantly (no delay), characters get typed delay
-        var isTag = token.charAt(0) === '<';
-        if (isTag) {
-          typeNext(); // immediately do next token
-        } else {
-          setTimeout(typeNext, speed);
-        }
+        setTimeout(typeNext, speed);
       }
 
       typeNext();
