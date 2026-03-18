@@ -524,44 +524,107 @@
 })();
 </script>
 
-<!-- Code block line-by-line animation -->
+<!-- Code block typewriter animation -->
 <script>
 (function () {
   var blocks = document.querySelectorAll('.code-block');
+  var animated = [];
 
+  // Parse HTML into tokens: tags (inserted whole) and characters (typed one by one)
+  function tokenize(html) {
+    var tokens = [];
+    var i = 0;
+    while (i < html.length) {
+      if (html[i] === '<') {
+        var end = html.indexOf('>', i);
+        if (end !== -1) {
+          tokens.push(html.substring(i, end + 1));
+          i = end + 1;
+        } else {
+          tokens.push(html[i]);
+          i++;
+        }
+      } else {
+        tokens.push(html[i]);
+        i++;
+      }
+    }
+    return tokens;
+  }
+
+  // Prepare each block: save HTML, clear, add cursor
   blocks.forEach(function (block) {
     var pre = block.querySelector('pre');
     if (!pre) return;
 
-    // Split content into lines, preserving HTML
-    var html = pre.innerHTML;
-    var lines = html.split('\n');
+    var fullHTML = pre.innerHTML;
+    var tokens = tokenize(fullHTML);
 
-    // Wrap each line in a span
-    pre.innerHTML = lines.map(function (line, i) {
-      return '<span class="code-line" style="opacity:0;transform:translateY(8px);transition:opacity 0.4s ease,transform 0.4s ease;display:block;transition-delay:' + (i * 80) + 'ms">' + line + '</span>';
-    }).join('');
+    pre.innerHTML = '<span class="code-cursor"></span>';
+    pre.style.minHeight = pre.scrollHeight + 'px';
 
-    // Add blinking cursor to last line
-    var lastLine = pre.querySelector('.code-line:last-child');
-    if (lastLine) {
-      lastLine.innerHTML += '<span class="code-cursor"></span>';
-    }
+    animated.push({
+      el: block,
+      pre: pre,
+      tokens: tokens,
+      index: 0,
+      started: false
+    });
   });
 
-  // Intersection Observer to trigger animation
+  function typeBlock(item, delay) {
+    setTimeout(function () {
+      item.started = true;
+      var speed = 12; // ms per character
+
+      function typeNext() {
+        if (item.index >= item.tokens.length) {
+          // Done — remove cursor
+          var cursor = item.pre.querySelector('.code-cursor');
+          if (cursor) {
+            setTimeout(function () { cursor.style.display = 'none'; }, 1500);
+          }
+          return;
+        }
+
+        var token = item.tokens[item.index];
+        item.index++;
+
+        // Insert token before cursor
+        var cursor = item.pre.querySelector('.code-cursor');
+        if (cursor) {
+          cursor.insertAdjacentHTML('beforebegin', token);
+        }
+
+        // Tags get inserted instantly (no delay), characters get typed delay
+        var isTag = token.charAt(0) === '<';
+        if (isTag) {
+          typeNext(); // immediately do next token
+        } else {
+          setTimeout(typeNext, speed);
+        }
+      }
+
+      typeNext();
+    }, delay);
+  }
+
+  // Intersection Observer
+  var stagger = 0;
   var observer = new IntersectionObserver(function (entries) {
     entries.forEach(function (entry) {
-      if (entry.isIntersecting) {
-        var lines = entry.target.querySelectorAll('.code-line');
-        lines.forEach(function (line) {
-          line.style.opacity = '1';
-          line.style.transform = 'translateY(0)';
-        });
-        observer.unobserve(entry.target);
-      }
+      if (!entry.isIntersecting) return;
+
+      animated.forEach(function (item) {
+        if (item.el === entry.target && !item.started) {
+          typeBlock(item, stagger);
+          stagger += 300;
+        }
+      });
+
+      observer.unobserve(entry.target);
     });
-  }, { threshold: 0.2 });
+  }, { threshold: 0.3 });
 
   blocks.forEach(function (block) {
     observer.observe(block);
