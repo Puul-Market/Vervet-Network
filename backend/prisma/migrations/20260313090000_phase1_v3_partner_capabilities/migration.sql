@@ -1,0 +1,28 @@
+CREATE TYPE "PartnerOnboardingStage" AS ENUM (
+  'ACCOUNT_CREATED',
+  'API_ACCESS_READY',
+  'TRUST_SETUP_READY',
+  'DATA_MAPPING_IN_PROGRESS',
+  'BOOTSTRAP_IMPORT_COMPLETED',
+  'LIVE_FEED_CONNECTED',
+  'PRODUCTION_APPROVED'
+);
+
+CREATE TYPE "PartnerFeedHealthStatus" AS ENUM (
+  'UNKNOWN',
+  'HEALTHY',
+  'DEGRADED',
+  'DISCONNECTED'
+);
+
+ALTER TABLE "Partner"
+ADD COLUMN "apiConsumerEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "dataPartnerEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "fullAttestationPartnerEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "webhooksEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "batchVerificationEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "auditExportsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "sandboxEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "productionEnabled" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "onboardingStage" "PartnerOnboardingStage" NOT NULL DEFAULT 'ACCOUNT_CREATED',
+ADD COLUMN "feedHealthStatus" "PartnerFeedHealthStatus" NOT NULL DEFAULT 'UNKNOWN';

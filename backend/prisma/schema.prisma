@@ -1,0 +1,804 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PartnerType {
+  EXCHANGE
+  WALLET
+  PAYMENT_PROCESSOR
+  MERCHANT
+  FINTECH
+  OTHER
+}
+
+enum PartnerStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum PartnerOnboardingStage {
+  ACCOUNT_CREATED
+  API_ACCESS_READY
+  TRUST_SETUP_READY
+  DATA_MAPPING_IN_PROGRESS
+  BOOTSTRAP_IMPORT_COMPLETED
+  LIVE_FEED_CONNECTED
+  PRODUCTION_APPROVED
+}
+
+enum PartnerFeedHealthStatus {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  DISCONNECTED
+}
+
+enum PartnerUserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PartnerUserRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  ANALYST
+  READ_ONLY
+}
+
+enum PartnerUserInviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+}
+
+enum ProductionApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum PartnerProductionCorridorStatus {
+  GRANTED
+  REVOKED
+}
+
+enum SigningKeyAlgorithm {
+  ED25519
+  ES256K
+  RSA_PSS_SHA256
+}
+
+enum SigningKeyStatus {
+  ACTIVE
+  ROTATING
+  REVOKED
+  EXPIRED
+}
+
+enum IdentifierKind {
+  PARTNER_HANDLE
+  PARTNER_UID
+  EMAIL_HASH
+  PHONE_HASH
+  BUSINESS_ID
+  PAYMENT_HANDLE
+}
+
+enum IdentifierStatus {
+  ACTIVE
+  DISABLED
+  REVOKED
+}
+
+enum IdentifierVisibility {
+  PRIVATE
+  SEARCHABLE
+  RESOLVABLE
+}
+
+enum RecipientStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum ChainFamily {
+  EVM
+  TRON
+  SOLANA
+  OTHER
+}
+
+enum TokenStandard {
+  NATIVE
+  ERC20
+  TRC20
+  SPL
+  OTHER
+}
+
+enum MemoPolicy {
+  NONE
+  OPTIONAL
+  REQUIRED
+}
+
+enum AttestationType {
+  DESTINATION_ASSIGNMENT
+  DESTINATION_ROTATION
+  DESTINATION_REVOCATION
+  IDENTIFIER_BINDING
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REVOKED
+  EXPIRED
+}
+
+enum DestinationStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum QueryType {
+  RESOLVE
+  CONFIRM_ADDRESS
+  VERIFY_ADDRESS
+  BATCH_VERIFY
+}
+
+enum ResolutionBatchInputFormat {
+  CSV
+  ROWS
+  JSON
+}
+
+enum ResolutionOutcome {
+  RESOLVED
+  NO_MATCH
+  MISMATCH
+  AMBIGUOUS
+  UNVERIFIED
+  BLOCKED
+  ERROR
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskSignalKind {
+  ADDRESS_NOT_ATTESTED
+  ADDRESS_MISMATCH
+  NEW_DESTINATION
+  RECENT_ROTATION
+  IDENTIFIER_MISMATCH
+  ADDRESS_LOOKALIKE
+  EXPIRED_ATTESTATION
+  KEY_REVOKED
+  ENUMERATION_SUSPECTED
+  MULTIPLE_ACTIVE_DESTINATIONS
+  UNSUPPORTED_ASSET_NETWORK
+}
+
+enum WebhookEventType {
+  DESTINATION_UPDATED
+  DESTINATION_REVOKED
+  SIGNING_KEY_ROTATED
+  RECIPIENT_STATUS_CHANGED
+}
+
+enum WebhookStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  ABANDONED
+}
+
+enum AuditActorType {
+  SYSTEM
+  PARTNER
+  USER
+}
+
+enum AuditExportFormat {
+  CSV
+  JSON
+}
+
+enum AuditExportStatus {
+  PENDING
+  READY
+  FAILED
+  EXPIRED
+}
+
+model Partner {
+  id                 String                 @id @default(cuid())
+  slug               String                 @unique
+  displayName        String
+  partnerType        PartnerType
+  status             PartnerStatus          @default(ACTIVE)
+  isDirectoryListed  Boolean                @default(false)
+  apiConsumerEnabled Boolean                @default(true)
+  dataPartnerEnabled Boolean                @default(false)
+  fullAttestationPartnerEnabled Boolean     @default(false)
+  webhooksEnabled    Boolean                @default(true)
+  batchVerificationEnabled Boolean          @default(true)
+  auditExportsEnabled Boolean               @default(true)
+  sandboxEnabled     Boolean                @default(true)
+  productionEnabled  Boolean                @default(false)
+  onboardingStage    PartnerOnboardingStage @default(ACCOUNT_CREATED)
+  feedHealthStatus   PartnerFeedHealthStatus @default(UNKNOWN)
+  countryCode        String?                @db.Char(2)
+  metadata           Json?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  users              PartnerUser[]
+  userInvites        PartnerUserInvite[]
+  securitySettings   PartnerSecuritySettings?
+  apiCredentials     PartnerApiCredential[]
+  signingKeys        PartnerSigningKey[]
+  productionApprovalRequests PartnerProductionApprovalRequest[]
+  productionCorridors PartnerProductionCorridor[]
+  recipients         Recipient[]
+  identifiers        RecipientIdentifier[]
+  attestations       Attestation[]
+  resolutionRequests ResolutionRequest[]    @relation("RequesterPartner")
+  resolutionBatchRuns ResolutionBatchRun[]
+  webhookEndpoints   WebhookEndpoint[]
+  auditLogs          AuditLog[]             @relation("AuditActorPartner")
+  scopedAuditLogs    AuditLog[]             @relation("AuditSubjectPartner")
+  auditExportJobs    AuditExportJob[]
+}
+
+model PartnerApiCredential {
+  id         String   @id @default(cuid())
+  partnerId  String
+  label      String
+  keyPrefix  String   @unique
+  secretHash String
+  scopes     String[]
+  status     PartnerStatus @default(ACTIVE)
+  lastUsedAt DateTime?
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+  partner    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  requestNonces PartnerRequestNonce[]
+
+  @@index([partnerId, status])
+}
+
+model PartnerUser {
+  id           String            @id @default(cuid())
+  partnerId     String
+  email        String            @unique
+  fullName     String
+  role         PartnerUserRole   @default(OWNER)
+  scopes       String[]
+  passwordHash String            @db.Text
+  status       PartnerUserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  disabledAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  partner      Partner           @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  sessions     DashboardSession[]
+  createdInvites PartnerUserInvite[] @relation("PartnerUserInviteCreator")
+  productionApprovalRequests PartnerProductionApprovalRequest[] @relation("ProductionApprovalRequestedBy")
+  auditExportJobs AuditExportJob[] @relation("AuditExportRequestedBy")
+  resolutionBatchRuns ResolutionBatchRun[] @relation("ResolutionBatchRequestedBy")
+
+  @@index([partnerId, status])
+}
+
+model PartnerUserInvite {
+  id            String                  @id @default(cuid())
+  partnerId      String
+  email         String
+  fullName      String?
+  role          PartnerUserRole
+  scopes        String[]
+  keyPrefix     String                  @unique
+  secretHash    String
+  status        PartnerUserInviteStatus @default(PENDING)
+  createdByUserId String?
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  partner       Partner                 @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  createdByUser PartnerUser?            @relation("PartnerUserInviteCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([partnerId, email, status])
+  @@index([partnerId, status])
+  @@index([expiresAt])
+}
+
+model DashboardSession {
+  id            String      @id @default(cuid())
+  partnerUserId  String
+  keyPrefix     String      @unique
+  secretHash    String
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastUsedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  partnerUser   PartnerUser @relation(fields: [partnerUserId], references: [id], onDelete: Cascade)
+
+  @@index([partnerUserId, revokedAt])
+  @@index([expiresAt])
+}
+
+model PartnerSecuritySettings {
+  id                         String   @id @default(cuid())
+  partnerId                  String   @unique
+  sessionIdleTimeoutMinutes  Int      @default(720)
+  enforceMfa                 Boolean  @default(false)
+  ipAllowlist                String[]
+  credentialRotationDays     Int      @default(90)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  partner                    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+}
+
+model PartnerProductionApprovalRequest {
+  id                 String                          @id @default(cuid())
+  partnerId          String
+  requestedByUserId  String?
+  status             ProductionApprovalRequestStatus @default(PENDING)
+  requestNote        String?                         @db.Text
+  reviewNote         String?                         @db.Text
+  reviewedByIdentifier String?
+  requestedAt        DateTime                        @default(now())
+  reviewedAt         DateTime?
+  createdAt          DateTime                        @default(now())
+  updatedAt          DateTime                        @updatedAt
+  partner            Partner                         @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  requestedByUser    PartnerUser?                    @relation("ProductionApprovalRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  requestedCorridors PartnerProductionApprovalRequestCorridor[]
+  approvedCorridors  PartnerProductionApprovalApprovedCorridor[]
+
+  @@index([partnerId, requestedAt])
+  @@index([partnerId, status, requestedAt])
+  @@index([status, requestedAt])
+}
+
+model PartnerProductionApprovalRequestCorridor {
+  id                 String                           @id @default(cuid())
+  requestId          String
+  assetNetworkId     String
+  createdAt          DateTime                         @default(now())
+  request            PartnerProductionApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assetNetwork       AssetNetwork                     @relation(fields: [assetNetworkId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, assetNetworkId])
+  @@index([assetNetworkId])
+}
+
+model PartnerProductionApprovalApprovedCorridor {
+  id                 String                           @id @default(cuid())
+  requestId          String
+  assetNetworkId     String
+  createdAt          DateTime                         @default(now())
+  request            PartnerProductionApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  assetNetwork       AssetNetwork                     @relation(fields: [assetNetworkId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, assetNetworkId])
+  @@index([assetNetworkId])
+}
+
+model PartnerProductionCorridor {
+  id                 String                         @id @default(cuid())
+  partnerId          String
+  assetNetworkId     String
+  status             PartnerProductionCorridorStatus @default(GRANTED)
+  note               String?                        @db.Text
+  grantedByIdentifier String?
+  grantedAt          DateTime                       @default(now())
+  revokedAt          DateTime?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  partner            Partner                        @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  assetNetwork       AssetNetwork                   @relation(fields: [assetNetworkId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, assetNetworkId])
+  @@index([partnerId, status])
+  @@index([assetNetworkId, status])
+}
+
+model PartnerSigningKey {
+  id           String              @id @default(cuid())
+  partnerId    String
+  keyId        String
+  algorithm    SigningKeyAlgorithm
+  publicKeyPem String              @db.Text
+  fingerprint  String              @unique
+  status       SigningKeyStatus    @default(ACTIVE)
+  validFrom    DateTime
+  validTo      DateTime?
+  rotatesAt    DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime            @default(now())
+  partner      Partner             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  attestations Attestation[]
+
+  @@unique([partnerId, keyId])
+  @@index([partnerId, status])
+}
+
+model Recipient {
+  id                 String              @id @default(cuid())
+  partnerId          String
+  externalRecipientId String
+  displayName        String?
+  status             RecipientStatus     @default(ACTIVE)
+  profile            Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  partner            Partner             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  identifiers        RecipientIdentifier[]
+  destinations       RecipientDestination[]
+  attestations       Attestation[]
+  resolutionRequests ResolutionRequest[] @relation("ResolvedRecipient")
+
+  @@unique([partnerId, externalRecipientId])
+  @@index([partnerId, status])
+}
+
+model RecipientIdentifier {
+  id                 String                 @id @default(cuid())
+  recipientId        String
+  partnerId          String
+  kind               IdentifierKind
+  rawValue           String
+  normalizedValue    String
+  status             IdentifierStatus       @default(ACTIVE)
+  visibility         IdentifierVisibility   @default(RESOLVABLE)
+  isPrimary          Boolean                @default(false)
+  verifiedAt         DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  recipient          Recipient              @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  partner            Partner                @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  attestations       Attestation[]          @relation("AttestedIdentifier")
+  resolutionRequests ResolutionRequest[]    @relation("ResolvedIdentifier")
+
+  @@unique([partnerId, kind, normalizedValue])
+  @@index([recipientId, status])
+}
+
+model Chain {
+  id           String         @id @default(cuid())
+  slug         String         @unique
+  displayName  String
+  family       ChainFamily
+  caip2        String?        @unique
+  isActive     Boolean        @default(true)
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  assetNetworks AssetNetwork[]
+}
+
+model Asset {
+  id           String         @id @default(cuid())
+  code         String         @unique
+  symbol       String
+  displayName  String
+  isActive     Boolean        @default(true)
+  metadata     Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  assetNetworks AssetNetwork[]
+
+  @@index([symbol])
+}
+
+model AssetNetwork {
+  id                        String                @id @default(cuid())
+  assetId                   String
+  chainId                   String
+  standard                  TokenStandard
+  contractAddressRaw        String?
+  contractAddressNormalized String                @default("")
+  decimals                  Int?
+  memoPolicy                MemoPolicy            @default(NONE)
+  memoLabel                 String?
+  isActive                  Boolean               @default(true)
+  metadata                  Json?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  asset                     Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  chain                     Chain                 @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  partnerProductionCorridors PartnerProductionCorridor[]
+  partnerProductionApprovalRequestCorridors PartnerProductionApprovalRequestCorridor[]
+  partnerProductionApprovalApprovedCorridors PartnerProductionApprovalApprovedCorridor[]
+  destinations              RecipientDestination[]
+  attestations              Attestation[]
+
+  @@unique([assetId, chainId, contractAddressNormalized])
+  @@index([chainId, isActive])
+}
+
+model RecipientDestination {
+  id                 String              @id @default(cuid())
+  recipientId        String
+  assetNetworkId     String
+  addressRaw         String
+  addressNormalized  String
+  memoValue          String              @default("")
+  status             DestinationStatus   @default(PENDING)
+  isDefault          Boolean             @default(false)
+  effectiveFrom      DateTime
+  lastAttestedAt     DateTime?
+  expiresAt          DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  recipient          Recipient           @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  assetNetwork       AssetNetwork        @relation(fields: [assetNetworkId], references: [id], onDelete: Cascade)
+  sourceAttestations Attestation[]       @relation("MaterializedDestination")
+  resolutionRequests ResolutionRequest[] @relation("ResolvedDestination")
+
+  @@unique([recipientId, assetNetworkId, addressNormalized, memoValue])
+  @@index([recipientId, assetNetworkId, status])
+  @@index([addressNormalized])
+}
+
+model Attestation {
+  id                         String                @id @default(cuid())
+  partnerId                  String
+  signingKeyId               String
+  attestationType            AttestationType
+  recipientId                String
+  identifierId               String?
+  assetNetworkId             String?
+  destinationId              String?
+  recipientIdentifierSnapshot String
+  displayNameSnapshot        String?
+  addressRaw                 String?
+  addressNormalized          String?
+  memoValue                  String                @default("")
+  canonicalPayload           String                @db.Text
+  payload                    Json
+  payloadHash                String
+  signature                  String                @db.Text
+  sequenceNumber             BigInt
+  issuedAt                   DateTime
+  effectiveFrom              DateTime
+  expiresAt                  DateTime?
+  verificationStatus         VerificationStatus    @default(PENDING)
+  verifiedAt                 DateTime?
+  revokedAt                  DateTime?
+  supersedesAttestationId    String?
+  ingestedAt                 DateTime              @default(now())
+  partner                    Partner               @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  signingKey                 PartnerSigningKey     @relation(fields: [signingKeyId], references: [id], onDelete: Restrict)
+  recipient                  Recipient             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  identifier                 RecipientIdentifier?  @relation("AttestedIdentifier", fields: [identifierId], references: [id], onDelete: SetNull)
+  assetNetwork               AssetNetwork?         @relation(fields: [assetNetworkId], references: [id], onDelete: SetNull)
+  destination                RecipientDestination? @relation("MaterializedDestination", fields: [destinationId], references: [id], onDelete: SetNull)
+  supersedes                 Attestation?          @relation("AttestationSupersession", fields: [supersedesAttestationId], references: [id], onDelete: SetNull)
+  supersededBy               Attestation[]         @relation("AttestationSupersession")
+  resolutionRequests         ResolutionRequest[]   @relation("ResolvedAttestation")
+
+  @@unique([partnerId, sequenceNumber])
+  @@unique([partnerId, payloadHash])
+  @@index([recipientId, verificationStatus])
+  @@index([partnerId, attestationType, issuedAt])
+}
+
+model ResolutionRequest {
+  id                        String              @id @default(cuid())
+  queryType                 QueryType
+  requesterPartnerId        String?
+  resolutionBatchRunId      String?
+  recipientIdentifierInput  String
+  recipientIdentifierNormalized String
+  platformInput             String?
+  chainInput                String
+  assetInput                String
+  providedAddressRaw        String?
+  providedAddressNormalized String?
+  resolvedRecipientId       String?
+  resolvedIdentifierId      String?
+  resolvedDestinationId     String?
+  resolvedAttestationId     String?
+  outcome                   ResolutionOutcome
+  riskLevel                 RiskLevel           @default(LOW)
+  recommendation            String?
+  flags                     String[]
+  clientReference           String?
+  idempotencyKey            String?
+  requestFingerprint        String?
+  requestedAt               DateTime            @default(now())
+  respondedAt               DateTime?
+  responseData              Json?
+  metadata                  Json?
+  requesterPartner          Partner?            @relation("RequesterPartner", fields: [requesterPartnerId], references: [id], onDelete: SetNull)
+  resolutionBatchRun        ResolutionBatchRun? @relation(fields: [resolutionBatchRunId], references: [id], onDelete: SetNull)
+  resolvedRecipient         Recipient?          @relation("ResolvedRecipient", fields: [resolvedRecipientId], references: [id], onDelete: SetNull)
+  resolvedIdentifier        RecipientIdentifier? @relation("ResolvedIdentifier", fields: [resolvedIdentifierId], references: [id], onDelete: SetNull)
+  resolvedDestination       RecipientDestination? @relation("ResolvedDestination", fields: [resolvedDestinationId], references: [id], onDelete: SetNull)
+  resolvedAttestation       Attestation?        @relation("ResolvedAttestation", fields: [resolvedAttestationId], references: [id], onDelete: SetNull)
+  riskSignals               RiskSignal[]
+
+  @@index([recipientIdentifierNormalized, requestedAt])
+  @@index([outcome, riskLevel, requestedAt])
+  @@index([requesterPartnerId, requestedAt])
+  @@index([requesterPartnerId, recipientIdentifierNormalized, requestedAt])
+  @@index([requesterPartnerId, platformInput, requestedAt])
+}
+
+model ResolutionBatchRun {
+  id                        String                    @id @default(cuid())
+  partnerId                 String
+  requestedByUserId         String?
+  inputFormat               ResolutionBatchInputFormat
+  chainInput                String
+  assetInput                String
+  stopOnFirstHighRisk       Boolean                   @default(false)
+  requireExactAttestedMatch Boolean                   @default(true)
+  rowCount                  Int
+  verifiedCount             Int                       @default(0)
+  warningCount              Int                       @default(0)
+  blockedCount              Int                       @default(0)
+  unsupportedCount          Int                       @default(0)
+  durationMs                Int?
+  createdAt                 DateTime                  @default(now())
+  completedAt               DateTime?
+  partner                   Partner                   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  requestedByUser           PartnerUser?              @relation("ResolutionBatchRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  rows                      ResolutionBatchRow[]
+  resolutionRequests        ResolutionRequest[]
+
+  @@index([partnerId, createdAt])
+}
+
+model ResolutionBatchRow {
+  id                       String             @id @default(cuid())
+  batchRunId               String
+  rowIndex                 Int
+  clientReference          String?
+  recipientIdentifierInput String
+  submittedAddressRaw      String
+  outcome                  ResolutionOutcome
+  riskLevel                RiskLevel
+  recommendation           String?
+  flags                    String[]
+  responseData             Json?
+  createdAt                DateTime           @default(now())
+  batchRun                 ResolutionBatchRun @relation(fields: [batchRunId], references: [id], onDelete: Cascade)
+
+  @@unique([batchRunId, rowIndex])
+  @@index([batchRunId, outcome])
+}
+
+model RiskSignal {
+  id                  String         @id @default(cuid())
+  resolutionRequestId String
+  kind                RiskSignalKind
+  severity            RiskLevel
+  details             Json?
+  createdAt           DateTime       @default(now())
+  resolutionRequest   ResolutionRequest @relation(fields: [resolutionRequestId], references: [id], onDelete: Cascade)
+
+  @@index([resolutionRequestId, kind])
+}
+
+model PartnerRequestNonce {
+  id          String              @id @default(cuid())
+  credentialId String
+  nonce       String
+  requestHash String
+  createdAt   DateTime            @default(now())
+  expiresAt   DateTime
+  credential  PartnerApiCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  @@unique([credentialId, nonce])
+  @@index([credentialId, createdAt])
+  @@index([expiresAt])
+}
+
+model WebhookEndpoint {
+  id                String             @id @default(cuid())
+  partnerId         String
+  label             String
+  url               String
+  signingSecretHash String
+  signingSecretVersion Int             @default(1)
+  eventTypes        WebhookEventType[]
+  status            WebhookStatus      @default(ACTIVE)
+  lastDeliveredAt   DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  partner           Partner            @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  deliveries        WebhookDelivery[]
+
+  @@index([partnerId, status])
+}
+
+model WebhookDelivery {
+  id            String         @id @default(cuid())
+  endpointId    String
+  eventType     WebhookEventType
+  payload       Json
+  payloadHash   String
+  status        DeliveryStatus @default(PENDING)
+  attemptCount  Int            @default(0)
+  nextAttemptAt DateTime?
+  lastAttemptAt DateTime?
+  responseCode  Int?
+  lastError     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  endpoint      WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, status, nextAttemptAt])
+}
+
+model AuditLog {
+  id            String         @id @default(cuid())
+  actorType     AuditActorType
+  actorPartnerId String?
+  subjectPartnerId String?
+  actorIdentifier String?
+  action        String
+  entityType    String
+  entityId      String
+  summary       String?
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  actorPartner  Partner?       @relation("AuditActorPartner", fields: [actorPartnerId], references: [id], onDelete: SetNull)
+  subjectPartner Partner?      @relation("AuditSubjectPartner", fields: [subjectPartnerId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorPartnerId, createdAt])
+  @@index([subjectPartnerId, createdAt])
+}
+
+model AuditExportJob {
+  id                String            @id @default(cuid())
+  partnerId         String
+  requestedByUserId String?
+  format            AuditExportFormat
+  status            AuditExportStatus @default(PENDING)
+  filters           Json?
+  downloadFilename  String?
+  downloadMimeType  String?
+  downloadContent   String?           @db.Text
+  expiresAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  partner           Partner           @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  requestedByUser   PartnerUser?      @relation("AuditExportRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([status, expiresAt])
+}

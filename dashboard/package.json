@@ -1,0 +1,31 @@
+{
+  "name": "dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test:playwright": "playwright test",
+    "test:playwright:admin-setup-entry": "playwright test tests/e2e/admin-setup-entry.spec.ts",
+    "test:playwright:external:state": "node ./scripts/run-external-playwright.mjs tests/e2e/partner-state-matrix.spec.ts tests/e2e/partner-role-admin-matrix.spec.ts",
+    "test:playwright:external:mutations": "node ./scripts/run-external-playwright.mjs tests/e2e/partner-mutation-flows.spec.ts tests/e2e/partner-trust-object-mutations.spec.ts tests/e2e/admin-production-governance.spec.ts tests/e2e/partner-access-security-mutations.spec.ts tests/e2e/partner-onboarding-approval.spec.ts",
+    "test:playwright:external": "node ./scripts/run-external-playwright.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "typescript": "^5"
+  }
+}

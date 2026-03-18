@@ -1,0 +1,76 @@
+name: Backend Quality
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  backend-quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        ports:
+          - 54329:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vervet_network
+        options: >-
+          --health-cmd "pg_isready -U postgres -d vervet_network"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:54329/vervet_network?schema=public
+      ADMIN_API_TOKEN: local-admin-token
+      WEBHOOK_SIGNING_MASTER_SECRET: ci-webhook-signing-master-secret
+      CORS_ALLOWED_ORIGINS: http://localhost:3001
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Validate Prisma schema
+        working-directory: backend
+        run: npm run prisma:validate
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npm run prisma:generate
+
+      - name: Apply database migrations
+        working-directory: backend
+        run: npm run db:migrate:deploy
+
+      - name: Seed database
+        working-directory: backend
+        run: npm run db:seed
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: npm test -- --runInBand
+
+      - name: Run backend e2e tests
+        working-directory: backend
+        run: npm run test:e2e -- --runInBand

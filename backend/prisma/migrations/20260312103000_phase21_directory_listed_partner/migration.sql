@@ -1,0 +1,2 @@
+ALTER TABLE "Partner"
+ADD COLUMN "isDirectoryListed" BOOLEAN NOT NULL DEFAULT false;
