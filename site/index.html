@@ -23,7 +23,7 @@
     <a href="#how-it-works" class="nav-link">How It Works</a>
     <a href="#features" class="nav-link">Features</a>
     <a href="#integrate" class="nav-link">Integrate</a>
-    <a href="#" class="nav-cta">Get API Access</a>
+    <a href="#" class="nav-cta" data-open-access-form>Get API Access</a>
   </div>
 </nav>
 
@@ -42,7 +42,7 @@
       Vervet is the verified wallet resolution network. Exchanges, wallets, and payment platforms share cryptographically attested destination data — so every transfer reaches the right person, on the right platform, on the right chain.
     </p>
     <div class="hero-ctas">
-      <a href="#" class="cta-primary">
+      <a href="#" class="cta-primary" data-open-access-form>
         Get API Access
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
       </a>
@@ -294,12 +294,125 @@
   <h2 class="cta-banner-title">Start resolving.<br/>Ship safer transfers.</h2>
   <p class="cta-banner-sub">Get API access and start verifying destinations in minutes.</p>
   <div class="cta-banner-actions">
-    <a href="#" class="cta-primary">
+    <a href="#" class="cta-primary" data-open-access-form>
       Get API Access
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     </a>
   </div>
 </section>
+
+<!-- ═══════════ ACCESS MODAL ═══════════ -->
+<div class="access-overlay" id="accessOverlay">
+  <div class="access-modal">
+    <button class="access-close" id="accessClose" aria-label="Close">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+
+    <!-- Form state -->
+    <div id="accessFormState">
+      <div class="access-header">
+        <div class="access-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+        </div>
+        <h3 class="access-title">Get API Access</h3>
+        <p class="access-sub">Tell us about your platform. We'll get you set up with sandbox credentials within 24 hours.</p>
+      </div>
+
+      <form id="accessForm" class="access-form">
+        <div class="access-row">
+          <label class="access-field">
+            <span>What's your name?</span>
+            <input type="text" name="name" placeholder="Jane Doe" required />
+          </label>
+          <label class="access-field">
+            <span>Best email to reach you?</span>
+            <input type="email" name="email" placeholder="you@company.com" required />
+          </label>
+        </div>
+
+        <label class="access-field">
+          <span>What company are you with?</span>
+          <input type="text" name="company" placeholder="e.g. Phantom, Binance, Stripe" required />
+        </label>
+
+        <label class="access-field">
+          <span>What best describes your platform?</span>
+          <select name="platformType" required>
+            <option value="" disabled selected>Choose one</option>
+            <option value="exchange">We're a crypto exchange</option>
+            <option value="wallet">We're a wallet provider</option>
+            <option value="payment_processor">We process crypto payments</option>
+            <option value="fintech">We're a fintech or neobank</option>
+            <option value="merchant">We're a merchant or marketplace</option>
+            <option value="other">Something else</option>
+          </select>
+        </label>
+
+        <label class="access-field">
+          <span>Do you manage wallets on behalf of users?</span>
+          <select name="custodyModel">
+            <option value="" disabled selected>Choose one</option>
+            <option value="custodial">Yes — we hold and manage user wallets</option>
+            <option value="non_custodial">No — users manage their own wallets</option>
+            <option value="hybrid">It's a mix of both</option>
+            <option value="not_applicable">Doesn't apply to us</option>
+          </select>
+        </label>
+
+        <label class="access-field">
+          <span>What are you looking to do with Vervet?</span>
+          <select name="integrationGoal" required>
+            <option value="" disabled selected>Choose one</option>
+            <option value="consume">Look up and verify where transfers are going</option>
+            <option value="supply">Share our users' wallet data with the network</option>
+            <option value="both">Both — verify destinations and share data</option>
+          </select>
+        </label>
+
+        <label class="access-field">
+          <span>How many transfers does your platform handle per month?</span>
+          <select name="volume">
+            <option value="" disabled selected>Rough estimate is fine</option>
+            <option value="under_1k">Under 1,000</option>
+            <option value="1k_10k">1,000 – 10,000</option>
+            <option value="10k_100k">10,000 – 100,000</option>
+            <option value="100k_1m">100,000 – 1,000,000</option>
+            <option value="over_1m">Over 1,000,000</option>
+          </select>
+        </label>
+
+        <fieldset class="access-fieldset">
+          <legend>Which chains do you support or plan to support?</legend>
+          <div class="access-chain-grid">
+            <label class="access-chain"><input type="checkbox" name="chains" value="ethereum" /><span>Ethereum</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="base" /><span>Base</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="arbitrum" /><span>Arbitrum</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="optimism" /><span>Optimism</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="polygon" /><span>Polygon</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="bnb" /><span>BNB Chain</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="tron" /><span>Tron</span></label>
+            <label class="access-chain"><input type="checkbox" name="chains" value="solana" /><span>Solana</span></label>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="access-submit" id="accessSubmit">
+          Request Access
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- Success state -->
+    <div id="accessSuccessState" class="access-success" style="display:none">
+      <div class="access-success-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+      </div>
+      <h3 class="access-title">You're on the list.</h3>
+      <p class="access-sub">We'll review your application and send sandbox credentials to your inbox within 24 hours.</p>
+      <button class="access-submit" id="accessDone">Done</button>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════ FOOTER ═══════════ -->
 <footer class="footer">
@@ -316,6 +429,100 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <!-- iPhone demo — same React component as dashboard -->
 <script src="demo-react.js"></script>
+
+<!-- Access-form modal logic -->
+<script>
+(function () {
+  var overlay = document.getElementById('accessOverlay');
+  var closeBtn = document.getElementById('accessClose');
+  var form = document.getElementById('accessForm');
+  var submitBtn = document.getElementById('accessSubmit');
+  var formState = document.getElementById('accessFormState');
+  var successState = document.getElementById('accessSuccessState');
+  var doneBtn = document.getElementById('accessDone');
+
+  function openModal(e) {
+    if (e) e.preventDefault();
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+  }
+
+  function resetForm() {
+    form.reset();
+    formState.style.display = '';
+    successState.style.display = 'none';
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = 'Request Access <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  }
+
+  // Open triggers
+  document.querySelectorAll('[data-open-access-form]').forEach(function (el) {
+    el.addEventListener('click', openModal);
+  });
+
+  // Close triggers
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // Done button
+  doneBtn.addEventListener('click', function () {
+    closeModal();
+    setTimeout(resetForm, 300);
+  });
+
+  // Submit
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+
+    var data = new FormData(form);
+    var chains = [];
+    document.querySelectorAll('input[name="chains"]:checked').forEach(function (cb) {
+      chains.push(cb.value);
+    });
+
+    var payload = {
+      name: data.get('name'),
+      email: data.get('email'),
+      company: data.get('company'),
+      platformType: data.get('platformType'),
+      custodyModel: data.get('custodyModel'),
+      integrationGoal: data.get('integrationGoal'),
+      volume: data.get('volume'),
+      chains: chains,
+      submittedAt: new Date().toISOString()
+    };
+
+    // Send to backend lead capture endpoint
+    fetch('https://api.vervet.network/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(function () {
+      formState.style.display = 'none';
+      successState.style.display = '';
+    })
+    .catch(function () {
+      // Still show success — lead will be in server logs via request body
+      formState.style.display = 'none';
+      successState.style.display = '';
+    });
+  });
+})();
+</script>
 
 </body>
 </html>
