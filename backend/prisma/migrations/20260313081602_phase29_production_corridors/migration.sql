@@ -32,8 +32,4 @@ ALTER TABLE "PartnerProductionCorridor" ADD CONSTRAINT "PartnerProductionCorrido
 -- AddForeignKey
 ALTER TABLE "PartnerProductionCorridor" ADD CONSTRAINT "PartnerProductionCorridor_assetNetworkId_fkey" FOREIGN KEY ("assetNetworkId") REFERENCES "AssetNetwork"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- RenameIndex
-ALTER INDEX "PartnerProductionApprovalRequest_partnerId_status_requestedAt_i" RENAME TO "PartnerProductionApprovalRequest_partnerId_status_requested_idx";
 
--- RenameIndex
-ALTER INDEX "ResolutionRequest_requesterPartnerId_platformInput_requestedAt_" RENAME TO "ResolutionRequest_requesterPartnerId_platformInput_requeste_idx";
