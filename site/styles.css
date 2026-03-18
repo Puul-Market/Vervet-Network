@@ -100,7 +100,7 @@ button { font-family: inherit; }
   background: rgba(52,211,153,0.12);
   border: 1px solid rgba(52,211,153,0.15);
   border-radius: 100px;
-  color: #5eead4; font-size: 12px; font-weight: 700;
+  color: #99f6e4; font-size: 12px; font-weight: 700;
   letter-spacing: 0.12em; text-transform: uppercase;
   margin-bottom: 28px;
 }
@@ -142,7 +142,7 @@ button { font-family: inherit; }
   padding: 14px 28px; border-radius: 14px;
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.10);
-  color: #fff; font-size: 15px; font-weight: 600;
+  color: #f0fdf4; font-size: 15px; font-weight: 600;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
 }
@@ -190,7 +190,7 @@ button { font-family: inherit; }
   background: rgba(52,211,153,0.12);
   border: 1px solid rgba(52,211,153,0.15);
   border-radius: 100px;
-  color: #5eead4; font-size: 11px; font-weight: 700;
+  color: #99f6e4; font-size: 11px; font-weight: 700;
   letter-spacing: 0.15em; text-transform: uppercase;
   margin-bottom: 16px;
 }
@@ -236,7 +236,7 @@ button { font-family: inherit; }
   border-radius: 6px;
   background: rgba(6,182,212,0.12);
   border: 1px solid rgba(6,182,212,0.18);
-  color: #22d3ee;
+  color: #67e8f9;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px; font-weight: 500;
   margin-bottom: 12px;
