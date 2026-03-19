@@ -161,3 +161,6 @@
 - Added backend-owned data-partner ingestion guidance to dashboard metadata, including the signed attestation flow, operational notes, an example `/v1/attestations` payload, and a cURL request template.
 - Added a reusable dashboard ingestion-guide panel and rendered it in `/setup`, `/docs/api`, and `/data-feed-health` when a partner is still waiting for the first signed trust update.
 - Verified Phase 46 with backend build/lint plus targeted metadata e2e coverage, and dashboard lint/build.
+- Hardened the GitHub Actions workflows by adding path-aware triggers and `concurrency` controls, splitting backend CI into a fast no-database lane plus a PostgreSQL-backed e2e lane, and refactoring the external dashboard browser workflow into a shared matrix job with Playwright browser caching.
+- Added the first CD scaffold at `.github/workflows/staging-deploy.yml`, which builds backend and dashboard staging bundles, uploads release artifacts plus a manifest, optionally calls a staging deployment webhook, and can run a post-deploy health check when repo configuration is present.
+- Verified Phase 47 by statically validating `.github/workflows/backend-quality.yml`, `.github/workflows/external-dashboard-regression.yml`, and `.github/workflows/staging-deploy.yml`, and by fixing the staging manifest to emit a real UTC timestamp instead of reusing the GitHub run ID.

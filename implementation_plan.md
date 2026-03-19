@@ -11,7 +11,48 @@ The V2 external dashboard has the right route structure and operational surfaces
 This is not a route-architecture reset. It is a capability, readiness, and onboarding layer added on top of the existing dashboard and backend.
 
 ## Current Focus
-Phase 46 is complete. The platform dashboard now explains the signed data-partner ingestion model directly in the product, instead of assuming partners already know how trust data is supposed to reach Vervet. Setup, API docs, and the first-attestation feed-health state now share a backend-owned guide with the signed attestation flow, operational notes, and inline request examples. The next focus is Phase 47: run a browser QA pass for the new ingestion guidance and decide whether Vervet wants to formalize a separate non-attestation data-feed ingestion model.
+Phase 47 is complete. The repository now has a stronger CI baseline plus the first CD scaffold: backend CI is split into fast and e2e lanes, the external dashboard browser workflow is path-aware and matrix-driven with shared setup plus Playwright caching, and a staging release/deploy workflow now builds artifacts and can trigger a staging target when repo secrets are configured. The next focus is Phase 48: wire the staging scaffold to the real hosting target, add a production promotion path, and then run the GitHub Actions burn-in pass against the live repository environment.
+
+## Phase 47 Scope
+- harden the existing GitHub Actions workflows so CI spends less time on stale or irrelevant runs
+- add concurrency control to cancel superseded runs on the same branch
+- add path-aware workflow triggers so backend, dashboard, and workflow changes run the right jobs instead of everything on every push
+- split backend validation into:
+  - a fast no-database quality lane
+  - a PostgreSQL-backed e2e lane
+- remove the repeated setup duplication from the external dashboard browser workflow while preserving the smoke, state, and mutation suite split
+- cache Playwright browsers in CI
+- add the first CD scaffold for staging release artifacts and deployment hooks
+
+## Phase 47 Backend / Ops Changes
+- replace the old single-lane backend quality workflow with:
+  - `backend-fast` for install, Prisma validation/generation, build, lint, and unit tests
+  - `backend-e2e` for PostgreSQL-backed migration, seed, and e2e validation
+- add workflow `concurrency`, explicit permissions, and path filters to the backend quality workflow
+- keep all CI environment requirements explicit in the workflow instead of relying on checked-in local state
+
+## Phase 47 Frontend / CI Changes
+- refactor the external dashboard regression workflow into one shared matrix job so smoke, state, and mutation suites no longer duplicate install/build/bootstrap logic three times
+- add path filters, workflow concurrency, and Playwright browser caching to the dashboard/browser workflow
+- preserve the existing smoke/state/mutation split while using the shared matrix job shape for maintainability
+- add a staging deploy workflow that:
+  - builds backend and dashboard release bundles
+  - uploads them as artifacts
+  - emits a release manifest
+  - optionally calls a configured staging deployment webhook
+  - optionally runs a staging health check
+
+## Phase 47 Files Expected
+- `.github/workflows/backend-quality.yml`
+- `.github/workflows/external-dashboard-regression.yml`
+- `.github/workflows/staging-deploy.yml`
+
+## Phase 47 Verification
+- workflow YAML validation for:
+  - `.github/workflows/backend-quality.yml`
+  - `.github/workflows/external-dashboard-regression.yml`
+  - `.github/workflows/staging-deploy.yml`
+- Phase 47 verification passed after validating all three workflow files, fixing the staging manifest timestamp generation, splitting backend CI into fast and e2e lanes, converting the dashboard browser workflow into a shared matrix job with Playwright caching, and adding the first staging release/deploy scaffold.
 
 ## Phase 46 Scope
 - make the signed data-partner ingestion model explicit inside the dashboard instead of leaving it implicit in the backend and docs

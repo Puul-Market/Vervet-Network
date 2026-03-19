@@ -47,3 +47,4 @@
 - [x] Phase 44: Add backend quality CI coverage and split the dashboard browser regression into parallel state and mutation workflow jobs
 - [x] Phase 45: Remove remaining backend-owned hardcoded dashboard metadata by serving corridors, option sets, onboarding guidance, and sandbox defaults from backend metadata APIs
 - [x] Phase 46: Explain the signed data-partner ingestion path directly in setup, API docs, and first-attestation feed-health states with backend-owned guidance and inline request examples
+- [x] Phase 47: Harden CI with concurrency, path-aware triggers, backend fast/e2e split, dashboard workflow deduplication plus Playwright caching, and add the first staging deploy scaffold
