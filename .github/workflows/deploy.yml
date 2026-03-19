@@ -1,0 +1,256 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - "dashboard/**"
+      - ".github/workflows/deploy.yml"
+      - ".github/actions/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: "🧪 Run Backend Tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ADMIN_API_TOKEN: local-admin-token
+      WEBHOOK_SIGNING_MASTER_SECRET: ci-webhook-signing-master-secret
+      CORS_ALLOWED_ORIGINS: http://localhost:3001
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Validate Prisma schema
+        working-directory: backend
+        run: npm run prisma:validate
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npm run prisma:generate
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: npm test -- --runInBand
+
+  backend-build:
+    name: "🔨 Verify Backend Build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ADMIN_API_TOKEN: local-admin-token
+      WEBHOOK_SIGNING_MASTER_SECRET: ci-webhook-signing-master-secret
+      CORS_ALLOWED_ORIGINS: http://localhost:3001
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npm run prisma:generate
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
+
+  deploy-backend:
+    name: "🚀 Deploy Backend to EC2"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - backend-tests
+      - backend-build
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_DEPLOY_PATH: ${{ secrets.EC2_DEPLOY_PATH }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+    steps:
+      - name: Check out repository
+        if: env.EC2_HOST != ''
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        if: env.EC2_HOST != ''
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        if: env.EC2_HOST != ''
+        working-directory: backend
+        run: npm ci
+
+      - name: Generate Prisma client
+        if: env.EC2_HOST != ''
+        working-directory: backend
+        run: npm run prisma:generate
+
+      - name: Build backend
+        if: env.EC2_HOST != ''
+        working-directory: backend
+        run: npm run build
+
+      - name: Prepare SSH key
+        if: env.EC2_HOST != ''
+        run: |
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to EC2
+        if: env.EC2_HOST != ''
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            --include='dist/***' \
+            --include='prisma/***' \
+            --include='package.json' \
+            --include='package-lock.json' \
+            --exclude='*' \
+            backend/ \
+            "$EC2_USER@$EC2_HOST:$EC2_DEPLOY_PATH/"
+
+      - name: Install production dependencies and run migrations
+        if: env.EC2_HOST != ''
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'DEPLOY_SCRIPT'
+            cd "${{ secrets.EC2_DEPLOY_PATH }}"
+            export DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}"
+            npm ci --production
+            npx prisma migrate deploy
+          DEPLOY_SCRIPT
+
+      - name: Restart backend service
+        if: env.EC2_HOST != ''
+        run: |
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'RESTART_SCRIPT'
+            cd "${{ secrets.EC2_DEPLOY_PATH }}"
+            if command -v pm2 &>/dev/null; then
+              pm2 restart vervet-backend --update-env || pm2 start dist/main.js --name vervet-backend
+            else
+              sudo systemctl restart vervet-backend
+            fi
+          RESTART_SCRIPT
+
+      - name: Skip deploy — secrets not configured
+        if: env.EC2_HOST == ''
+        run: |
+          echo "⚠️  EC2_HOST secret is not configured."
+          echo "Backend tests passed but deployment was skipped."
+          echo "Configure secrets in Settings → Secrets → Actions to enable deploys."
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+  health-check:
+    name: "🏥 Health Check"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - deploy-backend
+    env:
+      PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+    steps:
+      - name: Wait for backend to stabilize
+        if: env.PRODUCTION_API_URL != ''
+        run: sleep 10
+
+      - name: Check backend health endpoint
+        if: env.PRODUCTION_API_URL != ''
+        run: |
+          for attempt in $(seq 1 30); do
+            status=$(curl -sf -o /dev/null -w "%{http_code}" "$PRODUCTION_API_URL/v1/health" || echo "000")
+            if [ "$status" = "200" ]; then
+              echo "✅ Backend is healthy (HTTP $status)"
+              exit 0
+            fi
+            echo "Attempt $attempt/30: HTTP $status — retrying in 5s..."
+            sleep 5
+          done
+          echo "❌ Health check failed after 30 attempts."
+          exit 1
+
+      - name: Skip health check — URL not configured
+        if: env.PRODUCTION_API_URL == ''
+        run: |
+          echo "⚠️  PRODUCTION_API_URL secret is not configured."
+          echo "Health check was skipped."
+
+  deploy-summary:
+    name: "📋 Deployment Summary"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs:
+      - health-check
+    if: always()
+    env:
+      PRODUCTION_API_URL: ${{ secrets.PRODUCTION_API_URL }}
+    steps:
+      - name: Generate deployment summary
+        run: |
+          echo "## 📋 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Repository** | \`${{ github.repository }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Run ID** | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit message** | $(echo '${{ github.event.head_commit.message }}' | head -1) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          backend_result="${{ needs.health-check.result }}"
+          if [ "$backend_result" = "success" ]; then
+            echo "### ✅ Backend deployed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [ "$backend_result" = "skipped" ]; then
+            echo "### ⚠️ Backend deployment skipped (secrets not configured)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Backend deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Dashboard (Vercel)" >> $GITHUB_STEP_SUMMARY
+          echo "Dashboard deploys are handled automatically by Vercel's GitHub integration." >> $GITHUB_STEP_SUMMARY
