@@ -23,9 +23,9 @@
     vervet
   </a>
   <div class="nav-links">
-    <a href="#how-it-works" class="nav-link">How It Works</a>
-    <a href="#features" class="nav-link">Features</a>
-    <a href="#integrate" class="nav-link">Integrate</a>
+    <a href="javascript:void(0)" class="nav-link" data-scroll-to="how-it-works">How It Works</a>
+    <a href="javascript:void(0)" class="nav-link" data-scroll-to="features">Features</a>
+    <a href="javascript:void(0)" class="nav-link" data-scroll-to="integrate">Integrate</a>
     <a href="javascript:void(0)" class="nav-cta" data-open-access-form>Get API Access</a>
   </div>
 </nav>
@@ -466,6 +466,14 @@
   // Open triggers
   document.querySelectorAll('[data-open-access-form]').forEach(function (el) {
     el.addEventListener('click', openModal);
+  });
+
+  // Smooth scroll for nav links (no URL hash)
+  document.querySelectorAll('[data-scroll-to]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var target = document.getElementById(el.getAttribute('data-scroll-to'));
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
   });
 
   // Close triggers
