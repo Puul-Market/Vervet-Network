@@ -472,9 +472,17 @@
   document.querySelectorAll('[data-scroll-to]').forEach(function (el) {
     el.addEventListener('click', function () {
       var target = document.getElementById(el.getAttribute('data-scroll-to'));
-      if (target) target.scrollIntoView({ behavior: 'smooth' });
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth' });
+        history.replaceState(null, '', window.location.pathname);
+      }
     });
   });
+
+  // Clean up any stale hash in the URL on page load
+  if (window.location.hash) {
+    history.replaceState(null, '', window.location.pathname);
+  }
 
   // Close triggers
   closeBtn.addEventListener('click', closeModal);
