@@ -118,6 +118,9 @@ jobs:
     needs:
       - build-release-candidate
     environment: staging
+    env:
+      STAGING_DEPLOY_WEBHOOK_URL: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}
+      STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
     steps:
       - name: Download release manifest
         uses: actions/download-artifact@v5
@@ -138,9 +141,7 @@ jobs:
           path: release-artifacts
 
       - name: Trigger staging deployment webhook
-        if: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL != '' }}
-        env:
-          STAGING_DEPLOY_WEBHOOK_URL: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}
+        if: env.STAGING_DEPLOY_WEBHOOK_URL != ''
         run: |
           cat > release-artifacts/deploy-payload.json <<JSON
           {
@@ -162,15 +163,13 @@ jobs:
             "$STAGING_DEPLOY_WEBHOOK_URL"
 
       - name: Skip deploy when staging target is not configured
-        if: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL == '' }}
+        if: env.STAGING_DEPLOY_WEBHOOK_URL == ''
         run: |
           echo "No STAGING_DEPLOY_WEBHOOK_URL secret is configured."
           echo "Release bundles were built and uploaded, but deployment was skipped."
 
       - name: Run staging health check
-        if: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL != '' && vars.STAGING_HEALTHCHECK_URL != '' }}
-        env:
-          STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
+        if: env.STAGING_DEPLOY_WEBHOOK_URL != '' && env.STAGING_HEALTHCHECK_URL != ''
         run: |
           for attempt in $(seq 1 30); do
             if curl -fsSL "$STAGING_HEALTHCHECK_URL" >/dev/null; then
