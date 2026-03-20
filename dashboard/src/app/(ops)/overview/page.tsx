@@ -9,7 +9,9 @@ import { RiskBadge } from "@/components/risk-badge";
 import { SummaryCard } from "@/components/summary-card";
 import {
   formatConstantLabel,
+  formatCurrencyUsd,
   formatDateTime,
+  formatInteger,
   formatResolutionQueryType,
 } from "@/lib/format";
 import { clearDashboardSession, requireDashboardSession } from "@/lib/session";
@@ -57,6 +59,9 @@ export default async function OverviewPage() {
               <Link className="secondary-button" href="/resolution/verify-transfer">
                 Verify Transfer
               </Link>
+              <Link className="secondary-button" href="/access/plan-usage">
+                Plan & Usage
+              </Link>
               {dataFeedHealth ? (
                 <Link className="secondary-button" href="/data-feed-health">
                   Data Feed Health
@@ -90,6 +95,29 @@ export default async function OverviewPage() {
                 : "Trust data disabled"}
             </span>
           </article>
+          <article className="context-card">
+            <p className="eyebrow">Plan & usage</p>
+            <strong>{partnerProfile.billing.plan.label}</strong>
+            <div className="chip-row">
+              <span className="event-chip">
+                {partnerProfile.billing.plan.monthlyBasePriceUsd === null
+                  ? "Custom pricing"
+                  : `${formatCurrencyUsd(
+                      partnerProfile.billing.plan.monthlyBasePriceUsd,
+                      { maximumFractionDigits: 0 },
+                    )}/month`}
+              </span>
+            </div>
+            <span>
+              {formatInteger(partnerProfile.billing.usage.verificationsUsed)} used
+              {" · "}
+              {partnerProfile.billing.usage.includedVerifications === null
+                ? "Unlimited included"
+                : `${formatInteger(
+                    partnerProfile.billing.usage.remainingIncludedVerifications,
+                  )} remaining`}
+            </span>
+          </article>
           {dataFeedHealth ? (
             <FeedHealthCard
               actionHref="/data-feed-health"
@@ -99,6 +127,35 @@ export default async function OverviewPage() {
             />
           ) : null}
         </section>
+
+        {partnerProfile.billing.plan.requirements.requirementStatus === "UNMET" ||
+        partnerProfile.billing.usage.verificationLimitExceeded ? (
+          <section className="panel panel-warning">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Plan attention</p>
+                <h3>Commercial plan review recommended</h3>
+              </div>
+              <p className="panel-copy">
+                {partnerProfile.billing.plan.requirements.requirementStatus ===
+                "UNMET"
+                  ? partnerProfile.billing.plan.requirements.requirementNote ??
+                    "This pricing tier expects your organization to contribute attestation data for its own platform."
+                  : `Included monthly volume has been exceeded. Projected overage is ${formatCurrencyUsd(
+                      partnerProfile.billing.usage.projectedOverageUsd,
+                    )}.`}
+              </p>
+            </div>
+            <div className="page-header-actions">
+              <Link className="primary-button" href="/access/plan-usage">
+                Review Plan & Usage
+              </Link>
+              <Link className="secondary-button" href="/setup">
+                Review setup
+              </Link>
+            </div>
+          </section>
+        ) : null}
 
         <section className="summary-grid">
           <SummaryCard
@@ -140,6 +197,20 @@ export default async function OverviewPage() {
             label="Webhook failures"
             value={overview.kpis.webhookFailureCount}
             hint="Delivery issues in queue"
+          />
+          <SummaryCard
+            label="Verifications this month"
+            value={formatInteger(partnerProfile.billing.usage.verificationsUsed)}
+            hint={`${partnerProfile.billing.plan.label} plan`}
+          />
+          <SummaryCard
+            label="Projected overage"
+            value={formatCurrencyUsd(partnerProfile.billing.usage.projectedOverageUsd)}
+            hint={
+              partnerProfile.billing.plan.overagePriceUsd === null
+                ? "Custom billing"
+                : `${formatCurrencyUsd(partnerProfile.billing.plan.overagePriceUsd)} above included volume`
+            }
           />
           {dataFeedHealth ? (
             <SummaryCard

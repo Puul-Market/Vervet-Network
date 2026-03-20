@@ -19,7 +19,12 @@ import {
   type PartnerProfileRecord,
 } from "@/lib/vervet-api";
 import type { DashboardFlash } from "@/lib/flash";
-import { formatConstantLabel, formatDateTime } from "@/lib/format";
+import {
+  formatConstantLabel,
+  formatCurrencyUsd,
+  formatDateTime,
+  formatInteger,
+} from "@/lib/format";
 
 type ChecklistTask =
   | "create_api_key"
@@ -52,6 +57,8 @@ export function PartnerOnboardingHome({
   const canManageApproval = canManageProductionApproval(
     partnerProfile.authenticatedUser?.role,
   );
+  const starterRequirementUnmet =
+    partnerProfile.billing.plan.requirements.requirementStatus === "UNMET";
 
   return (
     <main className="setup-shell">
@@ -97,6 +104,16 @@ export function PartnerOnboardingHome({
 
         <section className="summary-grid">
           <SummaryCard
+            hint={partnerProfile.billing.plan.bestFor}
+            label="Current plan"
+            value={partnerProfile.billing.plan.label}
+          />
+          <SummaryCard
+            hint="Current billing-period verification volume"
+            label="Verifications used"
+            value={formatInteger(partnerProfile.billing.usage.verificationsUsed)}
+          />
+          <SummaryCard
             hint="Tracked onboarding checklist items"
             label="Completed tasks"
             value={completed.length}
@@ -120,6 +137,102 @@ export function PartnerOnboardingHome({
                 : "Not requested"
             }
           />
+        </section>
+
+        {starterRequirementUnmet ? (
+          <section className="panel panel-warning">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Starter requirement</p>
+                <h3>Contribute attestation data for your own platform</h3>
+              </div>
+              <p className="panel-copy">
+                {partnerProfile.billing.plan.requirements.requirementNote ??
+                  "Starter organizations are expected to contribute attestation data for their own platform."}
+              </p>
+            </div>
+            <div className="page-header-actions">
+              <Link className="primary-button" href="/access/signing-keys">
+                Register signing key
+              </Link>
+              <Link className="secondary-button" href="/access/plan-usage">
+                Review plan
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Plan snapshot</p>
+              <h3>Current commercial tier and monthly verification usage</h3>
+            </div>
+          </div>
+          <div className="detail-grid">
+            <article className="detail-card">
+              <span>Pricing tier</span>
+              <strong>{partnerProfile.billing.plan.label}</strong>
+              <p className="panel-copy">{partnerProfile.billing.plan.bestFor}</p>
+              <div className="detail-list">
+                <div className="stacked-cell">
+                  <strong>Base price</strong>
+                  <span>
+                    {partnerProfile.billing.plan.monthlyBasePriceUsd === null
+                      ? "Custom pricing"
+                      : `${formatCurrencyUsd(
+                          partnerProfile.billing.plan.monthlyBasePriceUsd,
+                          { maximumFractionDigits: 0 },
+                        )}/month`}
+                  </span>
+                </div>
+                <div className="stacked-cell">
+                  <strong>Included monthly volume</strong>
+                  <span>
+                    {partnerProfile.billing.plan.includedVerifications === null
+                      ? "Unlimited"
+                      : formatInteger(
+                          partnerProfile.billing.plan.includedVerifications,
+                        )}
+                  </span>
+                </div>
+              </div>
+            </article>
+
+            <article className="detail-card">
+              <span>Usage</span>
+              <strong>
+                {formatInteger(partnerProfile.billing.usage.verificationsUsed)} verifications
+              </strong>
+              <p className="panel-copy">
+                {partnerProfile.billing.usage.usagePercent === null
+                  ? "No fixed monthly verification cap applies on this plan."
+                  : `${partnerProfile.billing.usage.usagePercent}% of included monthly volume used so far.`}
+              </p>
+              <div className="detail-list">
+                <div className="stacked-cell">
+                  <strong>Remaining included volume</strong>
+                  <span>
+                    {partnerProfile.billing.usage.remainingIncludedVerifications ===
+                    null
+                      ? "Unlimited"
+                      : formatInteger(
+                          partnerProfile.billing.usage
+                            .remainingIncludedVerifications,
+                        )}
+                  </span>
+                </div>
+                <div className="stacked-cell">
+                  <strong>Projected overage</strong>
+                  <span>
+                    {formatCurrencyUsd(
+                      partnerProfile.billing.usage.projectedOverageUsd,
+                    )}
+                  </span>
+                </div>
+              </div>
+            </article>
+          </div>
         </section>
 
         {isDataContributorEnabled(partnerProfile) ? (

@@ -175,6 +175,7 @@ export class ResolutionController {
   @RequireCredentialScopes('resolution:batch')
   @RequirePartnerAccessPolicy({
     allCapabilities: ['batchVerificationEnabled'],
+    allPlanEntitlements: ['bulkVerificationEnabled'],
     requireOperationalEnvironment: true,
   })
   async batchVerify(

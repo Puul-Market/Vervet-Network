@@ -55,6 +55,17 @@ export class PartnerAccountController {
     return apiResponse(metadata);
   }
 
+  @Get('plan-usage')
+  @RequireCredentialScopes('partners:read')
+  async getPartnerPlanUsage(
+    @AuthenticatedPartnerContext() authenticatedPartner: AuthenticatedPartner,
+  ) {
+    const planUsage =
+      await this.partnersService.getPartnerPlanUsage(authenticatedPartner);
+
+    return apiResponse(planUsage);
+  }
+
   @Get('api-credentials')
   @RequireCredentialScopes('partners:read')
   @RequirePartnerAccessPolicy({

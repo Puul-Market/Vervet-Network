@@ -1,6 +1,7 @@
 import {
   PartnerFeedHealthStatus,
   PartnerOnboardingStage,
+  PartnerPricingPlan,
   PartnerStatus,
 } from '@prisma/client';
 import { IsBoolean, IsEnum, IsOptional } from 'class-validator';
@@ -17,6 +18,10 @@ export class UpdatePartnerAdminStateDto {
   @IsOptional()
   @IsEnum(PartnerFeedHealthStatus)
   feedHealthStatus?: PartnerFeedHealthStatus;
+
+  @IsOptional()
+  @IsEnum(PartnerPricingPlan)
+  pricingPlan?: PartnerPricingPlan;
 
   @IsOptional()
   @IsBoolean()

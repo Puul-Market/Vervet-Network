@@ -6,6 +6,7 @@ import {
   createPartner,
   DashboardAdminAuthError,
   humanizeDashboardError,
+  type PartnerPricingPlan,
   type PartnerType,
 } from "@/lib/vervet-api";
 
@@ -20,12 +21,16 @@ export async function POST(request: Request) {
   const slug = readRequiredTextField(formData.get("slug"));
   const displayName = readRequiredTextField(formData.get("displayName"));
   const partnerType = readRequiredEnumField<PartnerType>(formData.get("partnerType"));
+  const pricingPlan = readRequiredEnumField<PartnerPricingPlan>(
+    formData.get("pricingPlan"),
+  );
 
-  if (!slug || !displayName || !partnerType) {
+  if (!slug || !displayName || !partnerType || !pricingPlan) {
     await setDashboardFlash({
       level: "error",
       title: "Partner creation failed",
-      message: "Slug, display name, and a supported partner type are required.",
+      message:
+        "Slug, display name, partner type, and pricing plan are required.",
     });
 
     return NextResponse.redirect(new URL("/setup", request.url), 303);
@@ -35,6 +40,7 @@ export async function POST(request: Request) {
     const partner = await createPartner(session.adminToken, {
       displayName,
       partnerType,
+      pricingPlan,
       slug,
     });
 

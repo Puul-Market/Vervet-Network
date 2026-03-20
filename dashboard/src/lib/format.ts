@@ -105,3 +105,29 @@ export function isOlderThanDays(
 
   return currentTimeMs - updatedAtMs > thresholdMs;
 }
+
+export function formatInteger(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Not available";
+  }
+
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+export function formatCurrencyUsd(
+  value: number | null | undefined,
+  options?: {
+    maximumFractionDigits?: number;
+  },
+): string {
+  if (value === null || value === undefined) {
+    return "Custom";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: options?.maximumFractionDigits ?? 2,
+  }).format(value);
+}

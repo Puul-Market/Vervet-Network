@@ -41,6 +41,7 @@ interface DashboardMetadataResponse {
     identifierVisibilities: string[];
     auditActorTypes: string[];
     auditExportFormats: string[];
+    partnerPricingPlans: string[];
     credentialScopeDefinitions: Array<{
       value: string;
       label: string;
@@ -77,6 +78,7 @@ interface AdminSetupMetadataResponse {
   optionSets: {
     partnerTypes: string[];
     partnerStatuses: string[];
+    partnerPricingPlans: string[];
     partnerOnboardingStages: string[];
     partnerFeedHealthStatuses: string[];
     signingKeyAlgorithms: string[];
@@ -193,6 +195,7 @@ describe('Dashboard metadata API (e2e)', () => {
     expect(metadata.optionSets.identifierVisibilities).toContain('RESOLVABLE');
     expect(metadata.optionSets.auditActorTypes).toContain('PARTNER');
     expect(metadata.optionSets.auditExportFormats).toContain('CSV');
+    expect(metadata.optionSets.partnerPricingPlans).toContain('STARTER');
     expect(metadata.optionSets.credentialScopeDefinitions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -247,6 +250,7 @@ describe('Dashboard metadata API (e2e)', () => {
 
     expect(metadata.optionSets.partnerTypes).toContain('EXCHANGE');
     expect(metadata.optionSets.partnerStatuses).toContain('ACTIVE');
+    expect(metadata.optionSets.partnerPricingPlans).toContain('SCALE');
     expect(metadata.optionSets.partnerOnboardingStages).toContain(
       'ACCOUNT_CREATED',
     );

@@ -164,3 +164,10 @@
 - Hardened the GitHub Actions workflows by adding path-aware triggers and `concurrency` controls, splitting backend CI into a fast no-database lane plus a PostgreSQL-backed e2e lane, and refactoring the external dashboard browser workflow into a shared matrix job with Playwright browser caching.
 - Added the first CD scaffold at `.github/workflows/staging-deploy.yml`, which builds backend and dashboard staging bundles, uploads release artifacts plus a manifest, optionally calls a staging deployment webhook, and can run a post-deploy health check when repo configuration is present.
 - Verified Phase 47 by statically validating `.github/workflows/backend-quality.yml`, `.github/workflows/external-dashboard-regression.yml`, and `.github/workflows/staging-deploy.yml`, and by fixing the staging manifest to emit a real UTC timestamp instead of reusing the GitHub run ID.
+
+## 2026-03-19
+- Added partner pricing-plan support to the backend domain model with a new `PartnerPricingPlan` enum, persisted pricing-plan assignment on partner create/admin update flows, curated seed defaults for demo partners, and a backend-owned pricing catalog covering Starter, Growth, Scale, and Enterprise.
+- Added billing and usage summaries to the partner profile plus a new `GET /v1/partners/me/plan-usage` endpoint, including current billing-period verification counts, by-mode usage breakdown, included/remaining volume, projected overage, and plan requirement state.
+- Added plan-aware backend entitlement enforcement for batch verification so raw capability flags are no longer enough to reach premium flows when the assigned plan does not include them.
+- Added the dashboard `Plan & Usage` route, surfaced plan/usage context in Overview and Setup, added pricing-plan management to the admin setup workspace, and made batch-verification upgrade guidance point to the new plan surface.
+- Verified the pricing phase with Prisma generation/validation, backend build/lint/unit tests, and dashboard lint/build. DB-backed migration, seed, and pricing e2e verification remain blocked in this environment because Postgres on `localhost:54329` is not reachable.

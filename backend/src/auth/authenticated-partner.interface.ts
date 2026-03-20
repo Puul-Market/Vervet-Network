@@ -1,6 +1,7 @@
 import type {
   PartnerFeedHealthStatus,
   PartnerOnboardingStage,
+  PartnerPricingPlan,
   PartnerStatus,
   PartnerUserRole,
 } from '@prisma/client';
@@ -19,6 +20,14 @@ export interface AuthenticatedPartnerCapabilities {
   productionEnabled: boolean;
 }
 
+export interface AuthenticatedPartnerPlanEntitlements {
+  verificationAnalyticsEnabled: boolean;
+  bulkVerificationEnabled: boolean;
+  prioritySupportEnabled: boolean;
+  dedicatedIntegrationSupportEnabled: boolean;
+  customPricing: boolean;
+}
+
 export interface AuthenticatedPartner {
   actorIdentifier: string;
   actorType: PartnerAccessActorType;
@@ -27,7 +36,9 @@ export interface AuthenticatedPartner {
   partnerId: string;
   partnerSlug: string;
   partnerStatus: PartnerStatus;
+  partnerPricingPlan: PartnerPricingPlan;
   partnerCapabilities: AuthenticatedPartnerCapabilities;
+  partnerPlanEntitlements: AuthenticatedPartnerPlanEntitlements;
   partnerFeedHealthStatus: PartnerFeedHealthStatus;
   partnerOnboardingStage: PartnerOnboardingStage;
   partnerUserEmail: string | null;

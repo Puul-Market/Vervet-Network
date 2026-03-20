@@ -16,6 +16,11 @@ export type PartnerType =
   | "FINTECH"
   | "OTHER";
 export type PartnerStatus = "ACTIVE" | "SUSPENDED" | "DISABLED";
+export type PartnerPricingPlan =
+  | "STARTER"
+  | "GROWTH"
+  | "SCALE"
+  | "ENTERPRISE";
 export type PartnerOnboardingStage =
   | "ACCOUNT_CREATED"
   | "API_ACCESS_READY"
@@ -189,6 +194,51 @@ export interface DashboardLoginRecord {
   user: PartnerUserRecord;
 }
 
+export interface PartnerBillingPlanRecord {
+  code: PartnerPricingPlan;
+  label: string;
+  monthlyBasePriceUsd: number | null;
+  includedVerifications: number | null;
+  overagePriceUsd: number | null;
+  overagePolicyNote: string;
+  bestFor: string;
+  supportTierLabel: string;
+  featureHighlights: string[];
+  requirements: {
+    mustContributeOwnAttestationData: boolean;
+    requirementNote: string | null;
+    requirementStatus: "SATISFIED" | "UNMET" | "NOT_APPLICABLE";
+  };
+  entitlements: {
+    verificationAnalyticsEnabled: boolean;
+    bulkVerificationEnabled: boolean;
+    prioritySupportEnabled: boolean;
+    dedicatedIntegrationSupportEnabled: boolean;
+    customPricing: boolean;
+  };
+}
+
+export interface PartnerBillingUsageRecord {
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  verificationsUsed: number;
+  byRecipientVerifications: number;
+  byAddressVerifications: number;
+  verifyTransferVerifications: number;
+  batchVerifications: number;
+  includedVerifications: number | null;
+  remainingIncludedVerifications: number | null;
+  overageVerifications: number;
+  projectedOverageUsd: number | null;
+  usagePercent: number | null;
+  verificationLimitExceeded: boolean;
+}
+
+export interface PartnerBillingRecord {
+  plan: PartnerBillingPlanRecord;
+  usage: PartnerBillingUsageRecord;
+}
+
 export interface PartnerProfileRecord {
   id: string;
   slug: string;
@@ -228,6 +278,7 @@ export interface PartnerProfileRecord {
     approvedCorridorCount: number;
     statusLabel: string;
   };
+  billing: PartnerBillingRecord;
   productionAccess: {
     approvedCorridorCount: number;
     approvedCorridors: PartnerProductionCorridorRecord[];
@@ -316,6 +367,7 @@ export interface PartnerDashboardMetadataRecord {
   optionSets: {
     partnerTypes: PartnerType[];
     partnerStatuses: PartnerStatus[];
+    partnerPricingPlans: PartnerPricingPlan[];
     partnerOnboardingStages: PartnerOnboardingStage[];
     partnerFeedHealthStatuses: PartnerFeedHealthStatus[];
     partnerUserRoles: PartnerUserRole[];
@@ -370,6 +422,7 @@ export interface AdminSetupMetadataRecord {
   optionSets: {
     partnerTypes: PartnerType[];
     partnerStatuses: PartnerStatus[];
+    partnerPricingPlans: PartnerPricingPlan[];
     partnerOnboardingStages: PartnerOnboardingStage[];
     partnerFeedHealthStatuses: PartnerFeedHealthStatus[];
     partnerUserRoles: PartnerUserRole[];
@@ -443,6 +496,7 @@ export interface AdminPartnerRecord {
   capabilities: PartnerProfileRecord["capabilities"];
   onboarding: PartnerProfileRecord["onboarding"];
   readiness: PartnerProfileRecord["readiness"];
+  billing: PartnerProfileRecord["billing"];
   productionAccess: PartnerProfileRecord["productionAccess"];
   counts: {
     activeCredentialCount: number;
@@ -473,6 +527,7 @@ export type AvailableProductionCorridorRecord = ProductionCorridorAssetNetworkRe
 
 export type DashboardModule =
   | "overview"
+  | "plan_usage"
   | "data_feed"
   | "resolution"
   | "batch_verification"
@@ -1395,6 +1450,7 @@ export function canAccessModule(
 ): boolean {
   switch (module) {
     case "overview":
+    case "plan_usage":
     case "docs":
       return true;
     case "data_feed":
@@ -1407,7 +1463,8 @@ export function canAccessModule(
     case "batch_verification":
       return (
         canAccessModule(profile, "resolution") &&
-        profile.capabilities.batchVerificationEnabled
+        profile.capabilities.batchVerificationEnabled &&
+        profile.billing.plan.entitlements.bulkVerificationEnabled
       );
     case "registry":
       return isDataContributorEnabled(profile);
@@ -1606,6 +1663,7 @@ export async function createPartner(
     slug: string;
     displayName: string;
     partnerType: PartnerType;
+    pricingPlan?: PartnerPricingPlan;
   },
 ) {
   return fetchApi<{
@@ -1613,6 +1671,7 @@ export async function createPartner(
     slug: string;
     displayName: string;
     partnerType: PartnerType;
+    pricingPlan: PartnerPricingPlan;
     status: PartnerStatus;
     createdAt: string;
   }>({
@@ -1720,6 +1779,7 @@ export async function updateAdminPartnerState(
   partnerId: string,
   input: {
     status?: PartnerStatus;
+    pricingPlan?: PartnerPricingPlan;
     onboardingStage?: PartnerOnboardingStage;
     feedHealthStatus?: PartnerFeedHealthStatus;
     apiConsumerEnabled?: boolean;
@@ -1759,6 +1819,13 @@ export async function updateAdminPartnerProductionCorridor(
 export async function fetchPartnerProfile(accessToken: string) {
   return fetchApi<PartnerProfileRecord>({
     pathname: "/v1/partners/me",
+    accessToken,
+  });
+}
+
+export async function fetchPartnerPlanUsage(accessToken: string) {
+  return fetchApi<PartnerBillingRecord>({
+    pathname: "/v1/partners/me/plan-usage",
     accessToken,
   });
 }

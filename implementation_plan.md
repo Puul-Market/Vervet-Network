@@ -890,3 +890,88 @@ Phase 1 also adds two organization state fields:
   - reverting the enriched partner profile fields
   - reverting the dashboard shell gating and capability widgets
 - Existing scope-based behavior remains the fallback if capability metadata needs to be disabled.
+
+## Phase 48 — Partner Pricing, Usage Metering, and Plan Entitlements
+
+### Goal
+- Add a backend-owned pricing catalog for Starter, Growth, Scale, and Enterprise.
+- Meter verification usage by billing period.
+- Enforce plan-level entitlements in the backend and dashboard.
+- Surface pricing and usage directly in Overview, Setup, and a dedicated `Plan & Usage` page.
+
+### Backend changes
+- Add `PartnerPricingPlan` to the partner model and persist it on create/update flows.
+- Add a pricing catalog with:
+  - base monthly price
+  - included verification volume
+  - overage rate
+  - support tier
+  - feature highlights
+  - plan requirements
+  - plan entitlements
+- Extend partner profile responses with a `billing` block containing:
+  - current plan definition
+  - current billing-period usage
+  - usage breakdown by verification mode
+  - included/remaining volume
+  - projected overage
+  - Starter requirement status
+- Add `GET /v1/partners/me/plan-usage`.
+- Gate batch verification by pricing entitlement rather than raw dashboard navigation alone.
+- Expose pricing plans through dashboard/admin metadata option sets.
+
+### Frontend changes
+- Add `/access/plan-usage`.
+- Add a `Plan & Usage` nav entry under the partner console.
+- Show plan and usage context on:
+  - Overview
+  - Setup / onboarding
+  - admin setup workspace
+- Add admin controls for assigning a pricing plan during partner creation and partner-state updates.
+- Make batch verification availability plan-aware and route upgrade guidance to `Plan & Usage`.
+
+### Files touched in this phase
+- `backend/prisma/schema.prisma`
+- `backend/prisma/migrations/20260319014000_phase48_partner_pricing/migration.sql`
+- `backend/prisma/seed.ts`
+- `backend/src/auth/authenticated-partner.interface.ts`
+- `backend/src/auth/partner-access-policy.decorator.ts`
+- `backend/src/auth/partner-api-key-auth.guard.ts`
+- `backend/src/partners/partner-pricing.constants.ts`
+- `backend/src/partners/dashboard-metadata.service.ts`
+- `backend/src/partners/dto/create-partner.dto.ts`
+- `backend/src/partners/dto/update-partner-admin-state.dto.ts`
+- `backend/src/partners/partner-account.controller.ts`
+- `backend/src/partners/partners.service.ts`
+- `backend/src/resolution/resolution.controller.ts`
+- `backend/test/dashboard-metadata.e2e-spec.ts`
+- `backend/test/partner-pricing.e2e-spec.ts`
+- `dashboard/src/app/(ops)/access/plan-usage/page.tsx`
+- `dashboard/src/app/(ops)/overview/page.tsx`
+- `dashboard/src/app/(ops)/resolution/batch/page.tsx`
+- `dashboard/src/app/setup/actions/create-partner/route.ts`
+- `dashboard/src/app/setup/actions/update-partner-admin-state/route.ts`
+- `dashboard/src/components/admin-setup-workspace.tsx`
+- `dashboard/src/components/dashboard-nav.tsx`
+- `dashboard/src/components/partner-onboarding-home.tsx`
+- `dashboard/src/lib/format.ts`
+- `dashboard/src/lib/vervet-api.ts`
+
+### Verification status
+- Completed:
+  - `backend`: `npm run prisma:generate`
+  - `backend`: `npm run prisma:validate`
+  - `backend`: `npm run build`
+  - `backend`: `npm run lint`
+  - `backend`: `npm test -- --runInBand`
+  - `dashboard`: `npm run lint`
+  - `dashboard`: `npm run build`
+- Pending local environment dependency:
+  - `backend`: `npm run db:migrate:deploy`
+  - `backend`: `npm run db:seed`
+  - `backend`: `npm run test:e2e -- --runInBand test/partner-pricing.e2e-spec.ts`
+
+### Notes
+- `STARTER` includes all verification modes except the premium bulk verification entitlement; `bulkVerificationEnabled` is enforced for Scale and Enterprise only.
+- The Starter requirement to contribute signed attestation data is currently surfaced as backend-owned requirement state in the UI. It is not yet a hard production-approval blocker.
+- Existing local DB-backed verification is currently blocked because Postgres on `localhost:54329` is not reachable in this environment.

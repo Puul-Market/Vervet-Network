@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaPg } from '@prisma/adapter-pg';
 import {
   PartnerOnboardingStage,
+  PartnerPricingPlan,
   PartnerStatus,
   PartnerType,
   PartnerUserRole,
@@ -232,6 +233,7 @@ describe('Partner policy enforcement (e2e)', () => {
     dataPartnerEnabled?: boolean;
     fullAttestationPartnerEnabled?: boolean;
     onboardingStage?: PartnerOnboardingStage;
+    pricingPlan?: PartnerPricingPlan;
     sandboxEnabled?: boolean;
     productionEnabled?: boolean;
   }) {
@@ -241,6 +243,7 @@ describe('Partner policy enforcement (e2e)', () => {
         displayName: 'Phase 32 Partner',
         partnerType: PartnerType.EXCHANGE,
         status: PartnerStatus.ACTIVE,
+        pricingPlan: params.pricingPlan ?? PartnerPricingPlan.SCALE,
         apiConsumerEnabled: params.apiConsumerEnabled ?? true,
         dataPartnerEnabled: params.dataPartnerEnabled ?? false,
         fullAttestationPartnerEnabled:
@@ -285,6 +288,7 @@ describe('Partner policy enforcement (e2e)', () => {
         displayName: 'Phase 32 Dashboard Partner',
         partnerType: PartnerType.EXCHANGE,
         status: PartnerStatus.ACTIVE,
+        pricingPlan: PartnerPricingPlan.SCALE,
         apiConsumerEnabled: true,
         dataPartnerEnabled: true,
         fullAttestationPartnerEnabled: true,

@@ -120,6 +120,32 @@ export class PartnerApiKeyAuthGuard implements CanActivate {
       }
 
       if (
+        policy.anyPlanEntitlements &&
+        !policy.anyPlanEntitlements.some(
+          (
+            entitlement: keyof typeof authenticatedPartner.partnerPlanEntitlements,
+          ) => authenticatedPartner.partnerPlanEntitlements[entitlement],
+        )
+      ) {
+        throw new ForbiddenException(
+          'This endpoint is not enabled for the partner pricing plan.',
+        );
+      }
+
+      if (
+        policy.allPlanEntitlements &&
+        !policy.allPlanEntitlements.every(
+          (
+            entitlement: keyof typeof authenticatedPartner.partnerPlanEntitlements,
+          ) => authenticatedPartner.partnerPlanEntitlements[entitlement],
+        )
+      ) {
+        throw new ForbiddenException(
+          'This endpoint is not enabled for the partner pricing plan.',
+        );
+      }
+
+      if (
         policy.minOnboardingStage &&
         this.getOnboardingStageRank(
           authenticatedPartner.partnerOnboardingStage,

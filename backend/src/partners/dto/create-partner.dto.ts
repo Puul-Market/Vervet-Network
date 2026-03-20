@@ -1,5 +1,5 @@
-import { PartnerType } from '@prisma/client';
-import { IsEnum, IsString, MaxLength } from 'class-validator';
+import { PartnerPricingPlan, PartnerType } from '@prisma/client';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreatePartnerDto {
   @IsString()
@@ -12,4 +12,8 @@ export class CreatePartnerDto {
 
   @IsEnum(PartnerType)
   partnerType!: PartnerType;
+
+  @IsOptional()
+  @IsEnum(PartnerPricingPlan)
+  pricingPlan?: PartnerPricingPlan;
 }

@@ -43,6 +43,11 @@ export default async function BatchVerifyPage() {
     }
 
     if (!canAccessModule(partnerProfile, "batch_verification")) {
+      const upgradeMessage =
+        partnerProfile.billing.plan.entitlements.bulkVerificationEnabled
+          ? "Enable batch verification capability for this organization before using treasury-scale verification workflows."
+          : "Bulk verification is available on the Scale and Enterprise plans. Upgrade this organization’s plan before using treasury or payroll verification workflows.";
+
       return (
         <section className="panel-stack">
           <PageHeader
@@ -52,9 +57,17 @@ export default async function BatchVerifyPage() {
           />
           <ModuleAvailabilityBanner
             title="Batch verification is disabled"
-            description="Enable batch verification capability for this organization before using treasury-scale verification workflows."
-            actionHref="/setup"
-            actionLabel="Continue setup"
+            description={upgradeMessage}
+            actionHref={
+              partnerProfile.billing.plan.entitlements.bulkVerificationEnabled
+                ? "/setup"
+                : "/access/plan-usage"
+            }
+            actionLabel={
+              partnerProfile.billing.plan.entitlements.bulkVerificationEnabled
+                ? "Continue setup"
+                : "Review plan"
+            }
           />
         </section>
       );

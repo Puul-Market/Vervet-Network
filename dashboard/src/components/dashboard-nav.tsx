@@ -25,7 +25,10 @@ interface NavigationGroup {
 const navigationGroups: readonly NavigationGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/overview", label: "Overview", module: "overview" }],
+    items: [
+      { href: "/overview", label: "Overview", module: "overview" },
+      { href: "/access/plan-usage", label: "Plan & Usage", module: "plan_usage", scopes: ["partners:read"] },
+    ],
   },
   {
     label: "Data Feed",

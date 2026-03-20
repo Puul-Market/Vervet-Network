@@ -3,7 +3,12 @@ import { AdminSetupEntryForm } from "@/components/admin-setup-entry-form";
 import { DashboardFlashBanner } from "@/components/dashboard-flash-banner";
 import { SummaryCard } from "@/components/summary-card";
 import { adminSetupLogoutAction } from "@/app/session-actions";
-import { formatConstantLabel, formatDateTime } from "@/lib/format";
+import {
+  formatConstantLabel,
+  formatCurrencyUsd,
+  formatDateTime,
+  formatInteger,
+} from "@/lib/format";
 import {
   type AdminSetupMetadataRecord,
   type AvailableProductionCorridorRecord,
@@ -217,6 +222,17 @@ export function AdminSetupWorkspace({
                   {(adminOptions?.partnerTypes ?? []).map((partnerType) => (
                     <option key={partnerType} value={partnerType}>
                       {formatConstantLabel(partnerType)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Pricing plan</span>
+                <select defaultValue="STARTER" name="pricingPlan">
+                  {(adminOptions?.partnerPricingPlans ?? []).map((pricingPlan) => (
+                    <option key={pricingPlan} value={pricingPlan}>
+                      {formatConstantLabel(pricingPlan)}
                     </option>
                   ))}
                 </select>
@@ -564,6 +580,7 @@ export function AdminSetupWorkspace({
                     <tr>
                       <th>Partner</th>
                       <th>Type</th>
+                      <th>Plan</th>
                       <th>Profile</th>
                       <th>Stage</th>
                       <th>Readiness</th>
@@ -581,6 +598,7 @@ export function AdminSetupWorkspace({
                           </div>
                         </td>
                         <td>{formatConstantLabel(partner.partnerType)}</td>
+                        <td>{partner.billing.plan.label}</td>
                         <td>
                           {formatConstantLabel(partner.capabilities.profileLabel)}
                         </td>
@@ -622,6 +640,10 @@ export function AdminSetupWorkspace({
                         <span>{formatConstantLabel(selectedPartner.partnerType)}</span>
                       </div>
                       <div className="stacked-cell">
+                        <strong>Plan</strong>
+                        <span>{selectedPartner.billing.plan.label}</span>
+                      </div>
+                      <div className="stacked-cell">
                         <strong>Status</strong>
                         <span>{formatConstantLabel(selectedPartner.status)}</span>
                       </div>
@@ -641,6 +663,22 @@ export function AdminSetupWorkspace({
                           {selectedPartner.counts.activeCredentialCount} keys ·{" "}
                           {selectedPartner.counts.activeSigningKeyCount} signers ·{" "}
                           {selectedPartner.counts.activeRecipientCount} recipients
+                        </span>
+                      </div>
+                      <div className="stacked-cell">
+                        <strong>Current usage</strong>
+                        <span>
+                          {formatInteger(
+                            selectedPartner.billing.usage.verificationsUsed,
+                          )}{" "}
+                          verifications ·{" "}
+                          {selectedPartner.billing.usage.projectedOverageUsd ===
+                          null
+                            ? "custom overage"
+                            : formatCurrencyUsd(
+                                selectedPartner.billing.usage.projectedOverageUsd,
+                              )}{" "}
+                          projected overage
                         </span>
                       </div>
                       {selectedPartner.latestProductionApprovalRequest
@@ -682,7 +720,8 @@ export function AdminSetupWorkspace({
                     <p className="panel-copy">
                       Use these guarded controls to adjust capability flags and
                       readiness state. Production enablement still flows through
-                      approval review.
+                      approval review, and bulk verification still requires a
+                      Scale or Enterprise plan.
                     </p>
 
                     <form
@@ -702,6 +741,20 @@ export function AdminSetupWorkspace({
                           <span>Status</span>
                           <select defaultValue={selectedPartner.status} name="status">
                             {(adminOptions?.partnerStatuses ?? []).map((option) => (
+                              <option key={option} value={option}>
+                                {formatConstantLabel(option)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Pricing plan</span>
+                          <select
+                            defaultValue={selectedPartner.billing.plan.code}
+                            name="pricingPlan"
+                          >
+                            {(adminOptions?.partnerPricingPlans ?? []).map((option) => (
                               <option key={option} value={option}>
                                 {formatConstantLabel(option)}
                               </option>

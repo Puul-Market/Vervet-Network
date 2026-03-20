@@ -9,6 +9,7 @@ import { clearAdminSetupSession, getAdminSetupSession } from "@/lib/session";
 import {
   DashboardAdminAuthError,
   humanizeDashboardError,
+  type PartnerPricingPlan,
   updateAdminPartnerState,
   type PartnerFeedHealthStatus,
   type PartnerOnboardingStage,
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
   const partnerId = readRequiredTextField(formData.get("partnerId"));
   const partnerSlug = readRequiredTextField(formData.get("partnerSlug"));
   const status = readRequiredEnumField<PartnerStatus>(formData.get("status"));
+  const pricingPlan = readRequiredEnumField<PartnerPricingPlan>(
+    formData.get("pricingPlan"),
+  );
   const onboardingStage = readRequiredEnumField<PartnerOnboardingStage>(
     formData.get("onboardingStage"),
   );
@@ -37,6 +41,7 @@ export async function POST(request: Request) {
     !partnerId ||
     !partnerSlug ||
     !status ||
+    !pricingPlan ||
     !onboardingStage ||
     !feedHealthStatus
   ) {
@@ -44,7 +49,7 @@ export async function POST(request: Request) {
       level: "error",
       title: "Partner update failed",
       message:
-        "Partner status, onboarding stage, and feed health must be selected before updating admin state.",
+        "Partner status, pricing plan, onboarding stage, and feed health must be selected before updating admin state.",
     });
 
     return NextResponse.redirect(buildSetupRedirectUrl(request.url, partnerSlug), 303);
@@ -53,6 +58,7 @@ export async function POST(request: Request) {
   try {
     await updateAdminPartnerState(session.adminToken, partnerId, {
       status,
+      pricingPlan,
       onboardingStage,
       feedHealthStatus,
       apiConsumerEnabled: readCheckboxField(formData.get("apiConsumerEnabled")),

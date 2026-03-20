@@ -12,12 +12,14 @@ import {
   PartnerFeedHealthStatus,
   Partner,
   PartnerOnboardingStage,
+  PartnerPricingPlan,
   PartnerProductionCorridorStatus,
   ProductionApprovalRequestStatus,
   PartnerStatus,
   PartnerUserInviteStatus,
   PartnerUserRole,
   Prisma,
+  QueryType,
   RecipientStatus,
   SigningKeyStatus,
   VerificationStatus,
@@ -67,6 +69,7 @@ import {
   onboardingActionCatalog,
   productionApprovalBlockedReasonDescriptions,
 } from './dashboard-metadata.constants';
+import { getPartnerPricingPlanDefinition } from './partner-pricing.constants';
 import {
   extractPartnerUserInvitePrefix,
   generatePartnerUserInviteToken,
@@ -244,6 +247,7 @@ const adminPartnerSelect = {
   displayName: true,
   partnerType: true,
   status: true,
+  pricingPlan: true,
   apiConsumerEnabled: true,
   dataPartnerEnabled: true,
   fullAttestationPartnerEnabled: true,
@@ -370,6 +374,16 @@ export interface PartnerOperationalCounts {
   resolutionRequestCount: number;
 }
 
+interface PartnerBillingUsageSummary {
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  verificationsUsed: number;
+  byRecipientVerifications: number;
+  byAddressVerifications: number;
+  verifyTransferVerifications: number;
+  batchVerifications: number;
+}
+
 type IssueCredentialInput = Pick<CreateApiCredentialDto, 'label' | 'scopes'> &
   Partial<Pick<CreateApiCredentialDto, 'partnerSlug'>>;
 
@@ -411,6 +425,8 @@ export class PartnersService {
           displayName,
           partnerType: createPartnerDto.partnerType,
           status: PartnerStatus.ACTIVE,
+          pricingPlan:
+            createPartnerDto.pricingPlan ?? PartnerPricingPlan.STARTER,
           apiConsumerEnabled: true,
           dataPartnerEnabled: false,
           fullAttestationPartnerEnabled: false,
@@ -427,6 +443,7 @@ export class PartnersService {
           slug: true,
           displayName: true,
           partnerType: true,
+          pricingPlan: true,
           status: true,
           createdAt: true,
         },
@@ -462,6 +479,7 @@ export class PartnersService {
           metadata: {
             partnerSlug: partner.slug,
             partnerType: partner.partnerType,
+            pricingPlan: partner.pricingPlan,
           },
         },
         transaction,
@@ -1475,6 +1493,10 @@ export class PartnersService {
       updateData.feedHealthStatus = updatePartnerAdminStateDto.feedHealthStatus;
     }
 
+    if (updatePartnerAdminStateDto.pricingPlan !== undefined) {
+      updateData.pricingPlan = updatePartnerAdminStateDto.pricingPlan;
+    }
+
     if (updatePartnerAdminStateDto.apiConsumerEnabled !== undefined) {
       updateData.apiConsumerEnabled =
         updatePartnerAdminStateDto.apiConsumerEnabled;
@@ -1538,6 +1560,7 @@ export class PartnersService {
             metadata: {
               previous: {
                 status: existingPartner.status,
+                pricingPlan: existingPartner.pricingPlan,
                 onboardingStage: existingPartner.onboardingStage,
                 feedHealthStatus: existingPartner.feedHealthStatus,
                 apiConsumerEnabled: existingPartner.apiConsumerEnabled,
@@ -1552,6 +1575,7 @@ export class PartnersService {
               },
               next: {
                 status: nextPartner.status,
+                pricingPlan: nextPartner.pricingPlan,
                 onboardingStage: nextPartner.onboardingStage,
                 feedHealthStatus: nextPartner.feedHealthStatus,
                 apiConsumerEnabled: nextPartner.apiConsumerEnabled,
@@ -1935,6 +1959,7 @@ export class PartnersService {
       authenticatedUser,
       latestProductionApprovalRequest,
       productionCorridors,
+      billingUsage,
     ] = await Promise.all([
       this.getPartnerByIdOrThrow(authenticatedPartner.partnerId),
       this.getPartnerOperationalCounts(authenticatedPartner.partnerId),
@@ -1949,6 +1974,7 @@ export class PartnersService {
         : Promise.resolve(null),
       this.getLatestProductionApprovalRequest(authenticatedPartner.partnerId),
       this.listGrantedProductionCorridors(authenticatedPartner.partnerId),
+      this.getPartnerBillingUsage(authenticatedPartner.partnerId),
     ]);
 
     return {
@@ -1971,6 +1997,7 @@ export class PartnersService {
         latestProductionApprovalRequest,
         productionCorridors.length,
       ),
+      billing: this.buildPartnerBillingSummary(partner, billingUsage),
       productionAccess:
         this.buildPartnerProductionAccessSummary(productionCorridors),
       productionApproval: this.buildPartnerProductionApprovalSummary(
@@ -1993,6 +2020,17 @@ export class PartnersService {
         : null,
       authenticatedUser,
     };
+  }
+
+  async getPartnerPlanUsage(authenticatedPartner: AuthenticatedPartner) {
+    const partner = await this.getPartnerByIdOrThrow(
+      authenticatedPartner.partnerId,
+    );
+    const usage = await this.getPartnerBillingUsage(
+      authenticatedPartner.partnerId,
+    );
+
+    return this.buildPartnerBillingSummary(partner, usage);
   }
 
   async issueApiCredential(createApiCredentialDto: CreateApiCredentialDto) {
@@ -2306,6 +2344,9 @@ export class PartnersService {
     }
 
     await this.maybeRecordCredentialUse(apiCredential.id);
+    const pricingPlan = getPartnerPricingPlanDefinition(
+      apiCredential.partner.pricingPlan,
+    );
 
     return {
       actorIdentifier: apiCredential.id,
@@ -2315,7 +2356,9 @@ export class PartnersService {
       partnerId: apiCredential.partnerId,
       partnerSlug: apiCredential.partner.slug,
       partnerStatus: apiCredential.partner.status,
+      partnerPricingPlan: apiCredential.partner.pricingPlan,
       partnerCapabilities: this.buildPartnerCapabilities(apiCredential.partner),
+      partnerPlanEntitlements: pricingPlan.entitlements,
       partnerFeedHealthStatus: apiCredential.partner.feedHealthStatus,
       partnerOnboardingStage: apiCredential.partner.onboardingStage,
       partnerUserEmail: null,
@@ -2558,6 +2601,9 @@ export class PartnersService {
     }
 
     await this.maybeRecordDashboardSessionUse(dashboardSession.id);
+    const pricingPlan = getPartnerPricingPlanDefinition(
+      dashboardSession.partnerUser.partner.pricingPlan,
+    );
 
     return {
       actorIdentifier: dashboardSession.partnerUser.email,
@@ -2567,9 +2613,11 @@ export class PartnersService {
       partnerId: dashboardSession.partnerUser.partnerId,
       partnerSlug: dashboardSession.partnerUser.partner.slug,
       partnerStatus: dashboardSession.partnerUser.partner.status,
+      partnerPricingPlan: dashboardSession.partnerUser.partner.pricingPlan,
       partnerCapabilities: this.buildPartnerCapabilities(
         dashboardSession.partnerUser.partner,
       ),
+      partnerPlanEntitlements: pricingPlan.entitlements,
       partnerFeedHealthStatus:
         dashboardSession.partnerUser.partner.feedHealthStatus,
       partnerOnboardingStage:
@@ -2789,6 +2837,83 @@ export class PartnersService {
     };
   }
 
+  private async getPartnerBillingUsage(
+    partnerId: string,
+  ): Promise<PartnerBillingUsageSummary> {
+    const { billingPeriodEnd, billingPeriodStart } =
+      this.getCurrentBillingPeriodBounds();
+
+    const usageByQueryType = await this.prismaService.resolutionRequest.groupBy(
+      {
+        by: ['queryType'],
+        where: {
+          requesterPartnerId: partnerId,
+          requestedAt: {
+            gte: billingPeriodStart,
+            lt: billingPeriodEnd,
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      },
+    );
+
+    const groupedUsage = new Map(
+      usageByQueryType.map((entry) => [entry.queryType, entry._count._all]),
+    );
+    const byRecipientVerifications = groupedUsage.get(QueryType.RESOLVE) ?? 0;
+    const byAddressVerifications =
+      groupedUsage.get(QueryType.CONFIRM_ADDRESS) ?? 0;
+    const verifyTransferVerifications =
+      groupedUsage.get(QueryType.VERIFY_ADDRESS) ?? 0;
+    const batchVerifications = groupedUsage.get(QueryType.BATCH_VERIFY) ?? 0;
+    const verificationsUsed = usageByQueryType.reduce(
+      (total, entry) => total + entry._count._all,
+      0,
+    );
+
+    return {
+      billingPeriodStart: billingPeriodStart.toISOString(),
+      billingPeriodEnd: billingPeriodEnd.toISOString(),
+      verificationsUsed,
+      byRecipientVerifications,
+      byAddressVerifications,
+      verifyTransferVerifications,
+      batchVerifications,
+    };
+  }
+
+  private getCurrentBillingPeriodBounds(referenceDate = new Date()) {
+    const billingPeriodStart = new Date(
+      Date.UTC(
+        referenceDate.getUTCFullYear(),
+        referenceDate.getUTCMonth(),
+        1,
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+    const billingPeriodEnd = new Date(
+      Date.UTC(
+        referenceDate.getUTCFullYear(),
+        referenceDate.getUTCMonth() + 1,
+        1,
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+
+    return {
+      billingPeriodStart,
+      billingPeriodEnd,
+    };
+  }
+
   private async getLatestProductionApprovalRequest(
     partnerId: string,
   ): Promise<PartnerProductionApprovalRequestRecord | null> {
@@ -2868,12 +2993,17 @@ export class PartnersService {
   }
 
   private async buildAdminPartnerWorkspaceRecord(partner: AdminPartnerRecord) {
-    const [counts, latestProductionApprovalRequest, productionCorridors] =
-      await Promise.all([
-        this.getPartnerOperationalCounts(partner.id),
-        this.getLatestProductionApprovalRequest(partner.id),
-        this.listGrantedProductionCorridors(partner.id),
-      ]);
+    const [
+      counts,
+      latestProductionApprovalRequest,
+      productionCorridors,
+      billingUsage,
+    ] = await Promise.all([
+      this.getPartnerOperationalCounts(partner.id),
+      this.getLatestProductionApprovalRequest(partner.id),
+      this.listGrantedProductionCorridors(partner.id),
+      this.getPartnerBillingUsage(partner.id),
+    ]);
 
     return {
       id: partner.id,
@@ -2893,6 +3023,10 @@ export class PartnersService {
         partner as Partner,
         latestProductionApprovalRequest,
         productionCorridors.length,
+      ),
+      billing: this.buildPartnerBillingSummary(
+        partner as Partner,
+        billingUsage,
       ),
       productionAccess:
         this.buildPartnerProductionAccessSummary(productionCorridors),
@@ -2965,6 +3099,87 @@ export class PartnersService {
       sandboxEnabled: partner.sandboxEnabled,
       productionEnabled: partner.productionEnabled,
       profileLabel: this.resolvePartnerCapabilityLabel(partner),
+    };
+  }
+
+  private buildPartnerBillingSummary(
+    partner: Pick<
+      Partner,
+      'pricingPlan' | 'fullAttestationPartnerEnabled' | 'dataPartnerEnabled'
+    >,
+    usage: PartnerBillingUsageSummary,
+  ) {
+    const pricingPlan = getPartnerPricingPlanDefinition(partner.pricingPlan);
+    const includedVerifications = pricingPlan.includedVerifications;
+    const remainingIncludedVerifications =
+      includedVerifications === null
+        ? null
+        : Math.max(includedVerifications - usage.verificationsUsed, 0);
+    const overageVerifications =
+      includedVerifications === null
+        ? 0
+        : Math.max(usage.verificationsUsed - includedVerifications, 0);
+    const projectedOverageUsd =
+      pricingPlan.overagePriceUsd === null
+        ? null
+        : Number(
+            (overageVerifications * pricingPlan.overagePriceUsd).toFixed(2),
+          );
+    const usagePercent =
+      includedVerifications === null || includedVerifications === 0
+        ? null
+        : Number(
+            ((usage.verificationsUsed / includedVerifications) * 100).toFixed(
+              1,
+            ),
+          );
+    const ownAttestationContributionSatisfied =
+      !pricingPlan.requirements.mustContributeOwnAttestationData ||
+      partner.fullAttestationPartnerEnabled ||
+      partner.dataPartnerEnabled;
+
+    return {
+      plan: {
+        code: partner.pricingPlan,
+        label: pricingPlan.label,
+        monthlyBasePriceUsd: pricingPlan.monthlyBasePriceUsd,
+        includedVerifications: pricingPlan.includedVerifications,
+        overagePriceUsd: pricingPlan.overagePriceUsd,
+        overagePolicyNote: pricingPlan.overagePolicyNote,
+        bestFor: pricingPlan.bestFor,
+        supportTierLabel: pricingPlan.supportTierLabel,
+        featureHighlights: pricingPlan.featureHighlights,
+        requirements: {
+          mustContributeOwnAttestationData:
+            pricingPlan.requirements.mustContributeOwnAttestationData,
+          requirementNote: pricingPlan.requirements.requirementNote,
+          requirementStatus: pricingPlan.requirements
+            .mustContributeOwnAttestationData
+            ? ownAttestationContributionSatisfied
+              ? 'SATISFIED'
+              : 'UNMET'
+            : 'NOT_APPLICABLE',
+        },
+        entitlements: pricingPlan.entitlements,
+      },
+      usage: {
+        billingPeriodStart: usage.billingPeriodStart,
+        billingPeriodEnd: usage.billingPeriodEnd,
+        verificationsUsed: usage.verificationsUsed,
+        byRecipientVerifications: usage.byRecipientVerifications,
+        byAddressVerifications: usage.byAddressVerifications,
+        verifyTransferVerifications: usage.verifyTransferVerifications,
+        batchVerifications: usage.batchVerifications,
+        includedVerifications,
+        remainingIncludedVerifications,
+        overageVerifications,
+        projectedOverageUsd,
+        usagePercent,
+        verificationLimitExceeded:
+          includedVerifications === null
+            ? false
+            : usage.verificationsUsed > includedVerifications,
+      },
     };
   }
 

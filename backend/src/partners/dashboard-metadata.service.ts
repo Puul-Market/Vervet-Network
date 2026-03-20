@@ -11,6 +11,7 @@ import {
   IdentifierVisibility,
   PartnerFeedHealthStatus,
   PartnerOnboardingStage,
+  PartnerPricingPlan,
   PartnerStatus,
   PartnerType,
   PartnerUserRole,
@@ -154,6 +155,7 @@ export class DashboardMetadataService {
     return {
       partnerTypes: Object.values(PartnerType),
       partnerStatuses: Object.values(PartnerStatus),
+      partnerPricingPlans: Object.values(PartnerPricingPlan),
       partnerOnboardingStages: Object.values(PartnerOnboardingStage),
       partnerFeedHealthStatuses: Object.values(PartnerFeedHealthStatus),
       partnerUserRoles: Object.values(PartnerUserRole),
@@ -200,6 +202,7 @@ export class DashboardMetadataService {
     return {
       partnerTypes: optionSets.partnerTypes,
       partnerStatuses: optionSets.partnerStatuses,
+      partnerPricingPlans: optionSets.partnerPricingPlans,
       partnerOnboardingStages: optionSets.partnerOnboardingStages,
       partnerFeedHealthStatuses: optionSets.partnerFeedHealthStatuses,
       partnerUserRoles: optionSets.partnerUserRoles,

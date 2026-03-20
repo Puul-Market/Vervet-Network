@@ -38,6 +38,13 @@ enum PartnerFeedHealthStatus {
   DISCONNECTED
 }
 
+enum PartnerPricingPlan {
+  STARTER
+  GROWTH
+  SCALE
+  ENTERPRISE
+}
+
 enum PartnerUserStatus {
   ACTIVE
   DISABLED
@@ -241,6 +248,7 @@ model Partner {
   displayName        String
   partnerType        PartnerType
   status             PartnerStatus          @default(ACTIVE)
+  pricingPlan        PartnerPricingPlan     @default(STARTER)
   isDirectoryListed  Boolean                @default(false)
   apiConsumerEnabled Boolean                @default(true)
   dataPartnerEnabled Boolean                @default(false)
