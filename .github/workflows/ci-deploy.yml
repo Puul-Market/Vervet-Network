@@ -153,11 +153,11 @@ jobs:
     needs: [quality, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     env:
-      EC2_HOST: ${{ vars['EC2_HOST'] }}
-      EC2_SSH_KEY: ${{ secrets['EC2_SSH_KEY'] }}
-      EC2_USER: ${{ vars['EC2_USER'] }}
-      EC2_DEPLOY_PATH: ${{ vars['EC2_DEPLOY_PATH'] }}
-      PRODUCTION_DATABASE_URL: ${{ secrets['PRODUCTION_DATABASE_URL'] }}
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+      EC2_USER: ${{ vars.EC2_USER }}
+      EC2_DEPLOY_PATH: ${{ vars.EC2_DEPLOY_PATH }}
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
       ADMIN_API_TOKEN: ci-deploy-token
       WEBHOOK_SIGNING_MASTER_SECRET: ci-deploy-placeholder
       CORS_ALLOWED_ORIGINS: "*"
@@ -270,10 +270,10 @@ jobs:
       ADMIN_API_TOKEN: local-admin-token
       WEBHOOK_SIGNING_MASTER_SECRET: ci-webhook-signing-master-secret
       CORS_ALLOWED_ORIGINS: http://localhost:3001
-      DASHBOARD_SESSION_SECRET: ${{ secrets['STAGING_DASHBOARD_SESSION_SECRET'] }}
-      VERVET_API_BASE_URL: ${{ vars['STAGING_VERVET_API_BASE_URL'] }}
-      STAGING_DEPLOY_WEBHOOK_URL: ${{ secrets['STAGING_DEPLOY_WEBHOOK_URL'] }}
-      STAGING_HEALTHCHECK_URL: ${{ vars['STAGING_HEALTHCHECK_URL'] }}
+      DASHBOARD_SESSION_SECRET: ${{ secrets.STAGING_DASHBOARD_SESSION_SECRET }}
+      VERVET_API_BASE_URL: ${{ vars.STAGING_VERVET_API_BASE_URL }}
+      STAGING_DEPLOY_WEBHOOK_URL: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}
+      STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -384,7 +384,7 @@ jobs:
     needs: deploy-production
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     env:
-      PRODUCTION_API_URL: ${{ vars['PRODUCTION_API_URL'] }}
+      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
     steps:
       - name: Wait for backend to stabilize
         if: env.PRODUCTION_API_URL != ''
@@ -416,7 +416,7 @@ jobs:
     needs: [quality, e2e, deploy-production, deploy-staging, health-check]
     if: always()
     env:
-      PRODUCTION_API_URL: ${{ vars['PRODUCTION_API_URL'] }}
+      PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL }}
     steps:
       - name: Generate deployment summary
         run: |
