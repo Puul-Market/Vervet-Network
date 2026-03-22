@@ -233,6 +233,17 @@
     return selectedAsset && amount.trim() && selectedNetwork && address.trim().length >= 8;
   }
 
+  /* ── live-update CTA button without full re-render ── */
+  function updateButton() {
+    const btn = document.getElementById('idemo-cta-btn');
+    if (!btn) return;
+    const ready = isFormComplete();
+    btn.style.background = ready ? '#fff' : 'rgba(255,255,255,0.06)';
+    btn.style.color = ready ? '#000' : 'rgba(255,255,255,0.2)';
+    btn.style.cursor = ready ? 'pointer' : 'default';
+    btn.style.opacity = ready ? '1' : '0.5';
+  }
+
   /* ── render ── */
   function render() {
     content.innerHTML = '';
@@ -287,6 +298,7 @@
       amtInput.addEventListener('input', (e) => {
         amount = e.target.value.replace(/[^0-9.,]/g, '');
         e.target.value = amount;
+        updateButton();
       });
       amtInput.addEventListener('focus', () => { amtBox.style.borderColor = 'rgba(6,182,212,0.5)'; amtBox.style.boxShadow = '0 0 0 3px rgba(6,182,212,0.08)'; });
       amtInput.addEventListener('blur', () => { amtBox.style.borderColor = 'rgba(255,255,255,0.08)'; amtBox.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.3)'; });
@@ -327,7 +339,7 @@
       addrInput.className = 'idemo-input-mono';
       addrInput.placeholder = 'Paste wallet address';
       addrInput.value = address;
-      addrInput.addEventListener('input', (e) => { address = e.target.value; });
+      addrInput.addEventListener('input', (e) => { address = e.target.value; updateButton(); });
       addrInput.addEventListener('focus', () => { addrBox.style.borderColor = 'rgba(6,182,212,0.5)'; addrBox.style.boxShadow = '0 0 0 3px rgba(6,182,212,0.08)'; });
       addrInput.addEventListener('blur', () => { addrBox.style.borderColor = 'rgba(255,255,255,0.08)'; addrBox.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.3)'; });
       addrInner.appendChild(addrInput);
@@ -424,7 +436,7 @@
     const ctaWrap = el('div', { paddingBottom: '16px' });
 
     if (phase === 'form' && !inferredPlatform) {
-      // Verify & Send — disabled unless form complete
+      // Verify & Send — starts disabled, updateButton() toggles it live
       const ready = isFormComplete();
       const btn = el('button', {
         width: '100%', height: '56px', borderRadius: '18px', border: 'none',
@@ -436,9 +448,8 @@
         transition: 'all 0.3s ease',
         fontFamily: 'inherit',
       }, 'Verify & Send');
-      if (ready) {
-        btn.addEventListener('click', handleVerify);
-      }
+      btn.id = 'idemo-cta-btn';
+      btn.addEventListener('click', () => { if (isFormComplete()) handleVerify(); });
       ctaWrap.appendChild(btn);
     } else if (phase === 'form' && inferredPlatform) {
       const btn = el('button', {
