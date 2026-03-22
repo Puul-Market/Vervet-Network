@@ -339,7 +339,26 @@
       addrInput.className = 'idemo-input-mono';
       addrInput.placeholder = 'Paste wallet address';
       addrInput.value = address;
-      addrInput.addEventListener('input', (e) => { address = e.target.value; updateButton(); });
+      addrInput.addEventListener('input', (e) => {
+        address = e.target.value;
+        updateButton();
+        // Auto-trigger platform inference once address is long enough
+        if (address.trim().length >= 8 && !inferredPlatform && phase === 'form') {
+          clearTimeout(addrInput._inferTimer);
+          addrInput._inferTimer = setTimeout(() => autoInfer(), 600);
+        }
+      });
+      addrInput.addEventListener('paste', (e) => {
+        // On paste, read the pasted value and trigger inference quickly
+        setTimeout(() => {
+          address = addrInput.value;
+          updateButton();
+          if (address.trim().length >= 8 && !inferredPlatform && phase === 'form') {
+            clearTimeout(addrInput._inferTimer);
+            addrInput._inferTimer = setTimeout(() => autoInfer(), 300);
+          }
+        }, 0);
+      });
       addrInput.addEventListener('focus', () => { addrBox.style.borderColor = 'rgba(6,182,212,0.5)'; addrBox.style.boxShadow = '0 0 0 3px rgba(6,182,212,0.08)'; });
       addrInput.addEventListener('blur', () => { addrBox.style.borderColor = 'rgba(255,255,255,0.08)'; addrBox.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.3)'; });
       addrInner.appendChild(addrInput);
@@ -614,6 +633,18 @@
   }
 
   /* ── Action handlers ── */
+  async function autoInfer() {
+    if (inferredPlatform || phase !== 'form') return;
+    phase = 'inferring';
+    render();
+
+    await wait(1500);
+
+    inferredPlatform = getVerifData(address);
+    phase = 'form';
+    render();
+  }
+
   async function handleVerify() {
     // Step 1: Infer platform
     phase = 'inferring';
