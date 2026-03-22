@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Try the Demo — Vervet Network</title>
+  <meta name="description" content="Experience how Vervet verified wallet resolution works. Try the interactive demo — select an asset, enter an amount, paste an address, and see instant verification." />
+  <meta name="theme-color" content="#030712" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .demo-page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 120px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ambient background */
+    .demo-page::before {
+      content: '';
+      position: absolute;
+      top: -20%;
+      left: -15%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: demo-bg-float 12s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .demo-page::after {
+      content: '';
+      position: absolute;
+      bottom: -20%;
+      right: -15%;
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba(52,211,153,0.06) 0%, transparent 70%);
+      border-radius: 50%;
+      animation: demo-bg-float 15s ease-in-out infinite 3s;
+      pointer-events: none;
+    }
+    @keyframes demo-bg-float {
+      0%, 100% { transform: scale(1) translate(0, 0); }
+      50% { transform: scale(1.1) translate(20px, -10px); }
+    }
+
+    .demo-header {
+      text-align: center;
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+    }
+    .demo-header-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(52,211,153,0.12);
+      border: 1px solid rgba(52,211,153,0.15);
+      border-radius: 100px;
+      color: #99f6e4;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .demo-header-tag-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px rgba(52,211,153,0.8);
+    }
+    .demo-header h1 {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      background: linear-gradient(180deg, #fff 30%, rgba(255,255,255,0.6));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin: 0 0 16px;
+    }
+    .demo-header p {
+      color: rgba(255,255,255,0.45);
+      font-size: 16px;
+      line-height: 1.7;
+      max-width: 460px;
+      margin: 0 auto;
+    }
+
+    .demo-phone-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 380px;
+      height: 780px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .demo-back-link {
+      margin-top: 40px;
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.4);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .demo-back-link:hover {
+      color: #34d399;
+    }
+
+    @media (max-width: 480px) {
+      .demo-page { padding: 100px 16px 60px; }
+      .demo-header h1 { font-size: 28px; }
+      .demo-phone-wrapper { width: 100%; max-width: 340px; height: auto; aspect-ratio: 320/660; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════ NAV ═══════════ -->
+<nav class="nav">
+  <a href="index.html" class="nav-logo">
+    <svg width="22" height="28" viewBox="0 0 22 28" fill="none">
+      <path d="M11 1L21 8.5L11 27L1 8.5L11 1Z" stroke="#34d399" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M1 8.5H21" stroke="#34d399" stroke-width="1.5"/>
+      <path d="M11 1L7 8.5L11 27L15 8.5L11 1Z" stroke="#34d399" stroke-width="1.5" stroke-linejoin="round"/>
+    </svg>
+    vervet
+  </a>
+  <div class="nav-links">
+    <a href="index.html" class="nav-link">Home</a>
+    <a href="index.html#how-it-works" class="nav-link">How It Works</a>
+    <a href="index.html#features" class="nav-link">Features</a>
+    <a href="index.html#pricing" class="nav-link">Pricing</a>
+    <a href="index.html#hero" class="nav-cta">Get API Access</a>
+  </div>
+</nav>
+
+<main class="demo-page">
+  <div class="demo-header">
+    <div class="demo-header-tag">
+      <span class="demo-header-tag-dot"></span>
+      Interactive Demo
+    </div>
+    <h1>Try it yourself.</h1>
+    <p>Experience the Vervet verification flow hands-on. Select an asset, enter an amount, paste an address — and watch verification happen in real time.</p>
+  </div>
+
+  <div class="demo-phone-wrapper" id="interactive-demo-mount"></div>
+
+  <a href="index.html" class="demo-back-link">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to home
+  </a>
+</main>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<!-- Interactive demo -->
+<script src="demo-interactive.js" defer></script>
+
+</body>
+</html>
