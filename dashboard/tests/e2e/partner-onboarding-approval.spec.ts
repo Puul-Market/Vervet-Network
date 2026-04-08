@@ -123,7 +123,12 @@ test.describe("partner onboarding and approval flows", () => {
     await page.getByRole("button", { name: "Resolve" }).click();
 
     await expect(
-      page.locator(".result-summary").getByText("Acme Merchant", { exact: true }),
+      page
+        .locator(".result-summary")
+        .getByText("merchant@ivorypay", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Verification only", { exact: true }),
     ).toBeVisible();
 
     await page.goto("/setup");
