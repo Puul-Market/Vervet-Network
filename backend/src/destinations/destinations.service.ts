@@ -4,8 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DestinationStatus, Prisma, VerificationStatus } from '@prisma/client';
 import { NormalizationService } from '../common/normalization/normalization.service';
+import { buildBlindIndex } from '../common/security/blind-index.util';
+import {
+  openSealedString,
+  sealString,
+} from '../common/security/sealed-data.util';
+import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDestinationDto } from './dto/create-destination.dto';
 import { ListDestinationsDto } from './dto/list-destinations.dto';
@@ -16,6 +23,7 @@ export class DestinationsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly normalizationService: NormalizationService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   async listPartnerDestinations(
@@ -71,6 +79,7 @@ export class DestinationsService {
               id: true,
               externalRecipientId: true,
               displayName: true,
+              displayNameCiphertext: true,
             },
           },
           assetNetwork: {
@@ -131,6 +140,7 @@ export class DestinationsService {
               id: true,
               externalRecipientId: true,
               displayName: true,
+              displayNameCiphertext: true,
             },
           },
           assetNetwork: {
@@ -231,6 +241,8 @@ export class DestinationsService {
       assetNetwork.chain.slug,
       createDestinationDto.address,
     );
+    const addressNormalizedBlindIndex =
+      this.buildAddressBlindIndex(normalizedAddress);
     const memoValue = createDestinationDto.memoValue?.trim() ?? '';
     const effectiveFrom = createDestinationDto.effectiveFrom
       ? new Date(createDestinationDto.effectiveFrom)
@@ -248,8 +260,15 @@ export class DestinationsService {
         where: {
           recipientId: recipient.id,
           assetNetworkId: assetNetwork.id,
-          addressNormalized: normalizedAddress,
           memoValue,
+          OR: [
+            {
+              addressNormalizedBlindIndex,
+            },
+            {
+              addressNormalized: normalizedAddress,
+            },
+          ],
         },
       });
 
@@ -279,7 +298,11 @@ export class DestinationsService {
             recipientId: recipient.id,
             assetNetworkId: assetNetwork.id,
             addressRaw: createDestinationDto.address.trim(),
+            addressRawCiphertext: this.sealOptionalString(
+              createDestinationDto.address.trim(),
+            ),
             addressNormalized: normalizedAddress,
+            addressNormalizedBlindIndex,
             memoValue,
             status: DestinationStatus.PENDING,
             isDefault: createDestinationDto.isDefault ?? false,
@@ -446,6 +469,7 @@ export class DestinationsService {
             id: true;
             externalRecipientId: true;
             displayName: true;
+            displayNameCiphertext: true;
           };
         };
         assetNetwork: {
@@ -468,9 +492,15 @@ export class DestinationsService {
       recipient: {
         id: destination.recipient.id,
         externalRecipientId: destination.recipient.externalRecipientId,
-        displayName: destination.recipient.displayName,
+        displayName: this.readProtectedString(
+          destination.recipient.displayName,
+          destination.recipient.displayNameCiphertext,
+        ),
       },
-      address: destination.addressRaw,
+      address: this.readProtectedString(
+        destination.addressRaw,
+        destination.addressRawCiphertext,
+      ),
       normalizedAddress: destination.addressNormalized,
       memoValue: destination.memoValue || null,
       status: destination.status,
@@ -497,5 +527,47 @@ export class DestinationsService {
           }
         : null,
     };
+  }
+
+  private sealOptionalString(value: string | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return sealString(
+      value,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private readProtectedString(
+    plaintextValue: string | null | undefined,
+    ciphertextValue: string | null | undefined,
+  ): string | null {
+    if (typeof plaintextValue === 'string' && plaintextValue.length > 0) {
+      return plaintextValue;
+    }
+
+    if (!ciphertextValue) {
+      return null;
+    }
+
+    return openSealedString(
+      ciphertextValue,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private buildAddressBlindIndex(normalizedAddress: string): string {
+    return buildBlindIndex(
+      normalizedAddress,
+      this.configService.get('BLIND_INDEX_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
   }
 }

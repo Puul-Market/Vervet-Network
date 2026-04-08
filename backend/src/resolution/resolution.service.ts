@@ -23,6 +23,7 @@ import {
 } from '@prisma/client';
 import type { AuthenticatedPartner } from '../auth/authenticated-partner.interface';
 import { AuditService } from '../audit/audit.service';
+import { buildBlindIndex } from '../common/security/blind-index.util';
 import { NormalizationService } from '../common/normalization/normalization.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1386,25 +1387,44 @@ export class ResolutionService {
     }
 
     const now = new Date();
+    const addressBlindIndex = buildBlindIndex(
+      lookupInput.addressNormalized,
+      this.configService.get('BLIND_INDEX_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
     const destinations = await this.prismaService.recipientDestination.findMany(
       {
         where: {
-          addressNormalized: lookupInput.addressNormalized,
+          AND: [
+            {
+              OR: [
+                {
+                  addressNormalizedBlindIndex: addressBlindIndex,
+                },
+                {
+                  addressNormalized: lookupInput.addressNormalized,
+                },
+              ],
+            },
+            {
+              OR: [
+                {
+                  expiresAt: null,
+                },
+                {
+                  expiresAt: {
+                    gt: now,
+                  },
+                },
+              ],
+            },
+          ],
           assetNetworkId: assetNetwork.id,
           status: DestinationStatus.ACTIVE,
           effectiveFrom: {
             lte: now,
           },
-          OR: [
-            {
-              expiresAt: null,
-            },
-            {
-              expiresAt: {
-                gt: now,
-              },
-            },
-          ],
           recipient: {
             partner: {
               ...(lookupInput.platformNormalized

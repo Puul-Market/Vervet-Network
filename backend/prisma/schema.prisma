@@ -468,6 +468,7 @@ model Recipient {
   partnerId          String
   externalRecipientId String
   displayName        String?
+  displayNameCiphertext String?          @db.Text
   status             RecipientStatus     @default(ACTIVE)
   profile            Json?
   createdAt          DateTime            @default(now())
@@ -488,7 +489,9 @@ model RecipientIdentifier {
   partnerId          String
   kind               IdentifierKind
   rawValue           String
+  rawValueCiphertext String?                @db.Text
   normalizedValue    String
+  normalizedValueBlindIndex String?
   status             IdentifierStatus       @default(ACTIVE)
   visibility         IdentifierVisibility   @default(RESOLVABLE)
   isPrimary          Boolean                @default(false)
@@ -502,6 +505,7 @@ model RecipientIdentifier {
   resolutionRequests ResolutionRequest[]    @relation("ResolvedIdentifier")
 
   @@unique([partnerId, kind, normalizedValue])
+  @@unique([partnerId, kind, normalizedValueBlindIndex])
   @@index([recipientId, status])
 }
 
@@ -563,7 +567,9 @@ model RecipientDestination {
   recipientId        String
   assetNetworkId     String
   addressRaw         String
+  addressRawCiphertext String?           @db.Text
   addressNormalized  String
+  addressNormalizedBlindIndex String?
   memoValue          String              @default("")
   status             DestinationStatus   @default(PENDING)
   isDefault          Boolean             @default(false)
@@ -579,8 +585,10 @@ model RecipientDestination {
   resolutionRequests ResolutionRequest[] @relation("ResolvedDestination")
 
   @@unique([recipientId, assetNetworkId, addressNormalized, memoValue])
+  @@unique([recipientId, assetNetworkId, addressNormalizedBlindIndex, memoValue], map: "RecipientDestination_addr_blind_uq")
   @@index([recipientId, assetNetworkId, status])
   @@index([addressNormalized])
+  @@index([addressNormalizedBlindIndex])
 }
 
 model Attestation {

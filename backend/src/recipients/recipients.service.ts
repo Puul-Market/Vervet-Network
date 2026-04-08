@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   DestinationStatus,
   IdentifierKind,
@@ -14,6 +15,12 @@ import {
   RecipientStatus,
 } from '@prisma/client';
 import { NormalizationService } from '../common/normalization/normalization.service';
+import { buildBlindIndex } from '../common/security/blind-index.util';
+import {
+  openSealedString,
+  sealString,
+} from '../common/security/sealed-data.util';
+import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
 import { UpdateRecipientDto } from './dto/update-recipient.dto';
@@ -48,6 +55,7 @@ export class RecipientsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly normalizationService: NormalizationService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   async upsertRecipient(
@@ -66,12 +74,14 @@ export class RecipientsService {
       },
       update: {
         displayName,
+        displayNameCiphertext: this.sealOptionalString(displayName),
         status: RecipientStatus.ACTIVE,
       },
       create: {
         partnerId: params.partnerId,
         externalRecipientId,
         displayName,
+        displayNameCiphertext: this.sealOptionalString(displayName),
         status: RecipientStatus.ACTIVE,
       },
     });
@@ -81,9 +91,12 @@ export class RecipientsService {
     params: UpsertIdentifierParams,
     database: Prisma.TransactionClient | PrismaService = this.prismaService,
   ) {
+    const rawValue = params.value.trim();
     const normalizedValue = this.normalizationService.normalizeIdentifier(
       params.value,
     );
+    const normalizedValueBlindIndex =
+      this.buildIdentifierBlindIndex(normalizedValue);
 
     return database.recipientIdentifier.upsert({
       where: {
@@ -95,7 +108,9 @@ export class RecipientsService {
       },
       update: {
         recipientId: params.recipientId,
-        rawValue: params.value.trim(),
+        rawValue,
+        rawValueCiphertext: this.sealOptionalString(rawValue),
+        normalizedValueBlindIndex,
         status: IdentifierStatus.ACTIVE,
         visibility: IdentifierVisibility.RESOLVABLE,
         isPrimary: true,
@@ -105,8 +120,10 @@ export class RecipientsService {
         recipientId: params.recipientId,
         partnerId: params.partnerId,
         kind: params.kind,
-        rawValue: params.value.trim(),
+        rawValue,
+        rawValueCiphertext: this.sealOptionalString(rawValue),
         normalizedValue,
+        normalizedValueBlindIndex,
         status: IdentifierStatus.ACTIVE,
         visibility: IdentifierVisibility.RESOLVABLE,
         isPrimary: true,
@@ -116,9 +133,19 @@ export class RecipientsService {
   }
 
   async findResolvableIdentifier(normalizedIdentifier: string) {
+    const normalizedValueBlindIndex =
+      this.buildIdentifierBlindIndex(normalizedIdentifier);
+
     return this.prismaService.recipientIdentifier.findFirst({
       where: {
-        normalizedValue: normalizedIdentifier,
+        OR: [
+          {
+            normalizedValueBlindIndex,
+          },
+          {
+            normalizedValue: normalizedIdentifier,
+          },
+        ],
         status: IdentifierStatus.ACTIVE,
         visibility: IdentifierVisibility.RESOLVABLE,
         recipient: {
@@ -335,14 +362,21 @@ export class RecipientsService {
 
     const normalizedIdentifier =
       this.normalizationService.normalizeIdentifier(primaryIdentifier);
+    const normalizedValueBlindIndex =
+      this.buildIdentifierBlindIndex(normalizedIdentifier);
     const existingIdentifier =
-      await this.prismaService.recipientIdentifier.findUnique({
+      await this.prismaService.recipientIdentifier.findFirst({
         where: {
-          partnerId_kind_normalizedValue: {
-            partnerId,
-            kind: identifierKind,
-            normalizedValue: normalizedIdentifier,
-          },
+          partnerId,
+          kind: identifierKind,
+          OR: [
+            {
+              normalizedValueBlindIndex,
+            },
+            {
+              normalizedValue: normalizedIdentifier,
+            },
+          ],
         },
       });
 
@@ -359,6 +393,7 @@ export class RecipientsService {
             partnerId,
             externalRecipientId,
             displayName,
+            displayNameCiphertext: this.sealOptionalString(displayName),
             status: RecipientStatus.ACTIVE,
             profile: createRecipientDto.profile as Prisma.InputJsonValue,
           },
@@ -373,7 +408,9 @@ export class RecipientsService {
             recipientId: recipient.id,
             kind: identifierKind,
             rawValue: primaryIdentifier,
+            rawValueCiphertext: this.sealOptionalString(primaryIdentifier),
             normalizedValue: normalizedIdentifier,
+            normalizedValueBlindIndex,
             status: IdentifierStatus.ACTIVE,
             visibility,
             isPrimary: true,
@@ -418,6 +455,9 @@ export class RecipientsService {
     if (updateRecipientDto.displayName !== undefined) {
       const displayName = updateRecipientDto.displayName.trim();
       updateData.displayName = displayName.length > 0 ? displayName : null;
+      updateData.displayNameCiphertext = this.sealOptionalString(
+        displayName.length > 0 ? displayName : null,
+      );
     }
 
     if (updateRecipientDto.profile !== undefined) {
@@ -579,7 +619,10 @@ export class RecipientsService {
     return {
       id: recipient.id,
       externalRecipientId: recipient.externalRecipientId,
-      displayName: recipient.displayName,
+      displayName: this.readProtectedString(
+        recipient.displayName,
+        recipient.displayNameCiphertext,
+      ),
       status: recipient.status,
       profile: recipient.profile,
       createdAt: recipient.createdAt.toISOString(),
@@ -588,7 +631,10 @@ export class RecipientsService {
       identifiers: recipient.identifiers.map((identifier) => ({
         id: identifier.id,
         kind: identifier.kind,
-        rawValue: identifier.rawValue,
+        rawValue: this.readProtectedString(
+          identifier.rawValue,
+          identifier.rawValueCiphertext,
+        ),
         normalizedValue: identifier.normalizedValue,
         status: identifier.status,
         visibility: identifier.visibility,
@@ -599,7 +645,10 @@ export class RecipientsService {
       })),
       currentDestinations: recipient.destinations.map((destination) => ({
         id: destination.id,
-        address: destination.addressRaw,
+        address: this.readProtectedString(
+          destination.addressRaw,
+          destination.addressRawCiphertext,
+        ),
         memo: destination.memoValue || null,
         status: destination.status,
         isDefault: destination.isDefault,
@@ -617,5 +666,47 @@ export class RecipientsService {
         },
       })),
     };
+  }
+
+  private sealOptionalString(value: string | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return sealString(
+      value,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private readProtectedString(
+    plaintextValue: string | null | undefined,
+    ciphertextValue: string | null | undefined,
+  ): string | null {
+    if (typeof plaintextValue === 'string' && plaintextValue.length > 0) {
+      return plaintextValue;
+    }
+
+    if (!ciphertextValue) {
+      return null;
+    }
+
+    return openSealedString(
+      ciphertextValue,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private buildIdentifierBlindIndex(normalizedValue: string): string {
+    return buildBlindIndex(
+      normalizedValue,
+      this.configService.get('BLIND_INDEX_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
   }
 }

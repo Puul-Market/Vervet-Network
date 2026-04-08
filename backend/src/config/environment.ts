@@ -37,6 +37,7 @@ export interface EnvironmentVariables {
   RESOLUTION_BATCH_MAX_ROWS: number;
   AUDIT_EXPORT_RETENTION_MS: number;
   DATA_ENCRYPTION_MASTER_SECRET: string;
+  BLIND_INDEX_MASTER_SECRET: string;
 }
 
 const allowedNodeEnvironments: readonly NodeEnvironment[] = [
@@ -193,6 +194,12 @@ export function validateEnvironment(
       config.DATA_ENCRYPTION_MASTER_SECRET ??
         config.WEBHOOK_SIGNING_MASTER_SECRET,
       'DATA_ENCRYPTION_MASTER_SECRET',
+    ),
+    BLIND_INDEX_MASTER_SECRET: parseRequiredString(
+      config.BLIND_INDEX_MASTER_SECRET ??
+        config.DATA_ENCRYPTION_MASTER_SECRET ??
+        config.WEBHOOK_SIGNING_MASTER_SECRET,
+      'BLIND_INDEX_MASTER_SECRET',
     ),
   };
 }

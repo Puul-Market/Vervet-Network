@@ -5,6 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   AttestationType,
   AuditActorType,
@@ -16,6 +17,9 @@ import {
 } from '@prisma/client';
 import { NormalizationService } from '../common/normalization/normalization.service';
 import { AuditService } from '../audit/audit.service';
+import { buildBlindIndex } from '../common/security/blind-index.util';
+import { sealString } from '../common/security/sealed-data.util';
+import type { EnvironmentVariables } from '../config/environment';
 import { PartnersService } from '../partners/partners.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecipientsService } from '../recipients/recipients.service';
@@ -59,6 +63,7 @@ export class AttestationsService {
     private readonly requestHardeningService: RequestHardeningService,
     private readonly webhooksService: WebhooksService,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   async createAttestation(
@@ -514,6 +519,12 @@ export class AttestationsService {
       },
       update: {
         addressRaw: createAttestationDto.address.trim(),
+        addressRawCiphertext: this.sealOptionalString(
+          createAttestationDto.address.trim(),
+        ),
+        addressNormalizedBlindIndex: this.buildAddressBlindIndex(
+          normalizedFields.address,
+        ),
         status: DestinationStatus.ACTIVE,
         isDefault: true,
         effectiveFrom: timing.effectiveFrom,
@@ -525,7 +536,13 @@ export class AttestationsService {
         recipientId,
         assetNetworkId,
         addressRaw: createAttestationDto.address.trim(),
+        addressRawCiphertext: this.sealOptionalString(
+          createAttestationDto.address.trim(),
+        ),
         addressNormalized: normalizedFields.address,
+        addressNormalizedBlindIndex: this.buildAddressBlindIndex(
+          normalizedFields.address,
+        ),
         memoValue: normalizedFields.memo,
         status: DestinationStatus.ACTIVE,
         isDefault: true,
@@ -536,6 +553,28 @@ export class AttestationsService {
     });
 
     return destination;
+  }
+
+  private sealOptionalString(value: string | null | undefined): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return sealString(
+      value,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private buildAddressBlindIndex(normalizedAddress: string): string {
+    return buildBlindIndex(
+      normalizedAddress,
+      this.configService.get('BLIND_INDEX_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
   }
 
   private buildAttestationWebhookPayload(

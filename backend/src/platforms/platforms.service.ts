@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   DestinationStatus,
   IdentifierStatus,
@@ -7,7 +8,9 @@ import {
   Prisma,
   RecipientStatus,
 } from '@prisma/client';
+import { buildBlindIndex } from '../common/security/blind-index.util';
 import { NormalizationService } from '../common/normalization/normalization.service';
+import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface SupportedPlatformRecord {
@@ -31,6 +34,7 @@ export class PlatformsService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly normalizationService: NormalizationService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   async listSupportedPlatforms(
@@ -39,6 +43,14 @@ export class PlatformsService {
     const now = new Date();
     const assetNetworkFilter = this.buildAssetNetworkFilter(params);
     const addressFilter = this.buildAddressFilter(params);
+    const addressBlindIndex = addressFilter
+      ? buildBlindIndex(
+          addressFilter,
+          this.configService.get('BLIND_INDEX_MASTER_SECRET', {
+            infer: true,
+          }),
+        )
+      : null;
     const activeDestinationFilter: Prisma.RecipientDestinationWhereInput = {
       status: DestinationStatus.ACTIVE,
       effectiveFrom: {
@@ -56,7 +68,14 @@ export class PlatformsService {
       ],
       ...(addressFilter
         ? {
-            addressNormalized: addressFilter,
+            OR: [
+              {
+                addressNormalizedBlindIndex: addressBlindIndex,
+              },
+              {
+                addressNormalized: addressFilter,
+              },
+            ],
           }
         : {}),
       ...(assetNetworkFilter ? { assetNetwork: assetNetworkFilter } : {}),
