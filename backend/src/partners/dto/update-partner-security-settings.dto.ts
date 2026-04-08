@@ -1,8 +1,10 @@
 import {
   IsArray,
   IsBoolean,
+  IsIn,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -28,4 +30,29 @@ export class UpdatePartnerSecuritySettingsDto {
   @Type(() => Number)
   @Min(1)
   credentialRotationDays?: number;
+
+  @IsOptional()
+  @IsIn(['MASKED_LABEL', 'VERIFICATION_ONLY'])
+  defaultDisclosureMode?: 'MASKED_LABEL' | 'VERIFICATION_ONLY';
+
+  @IsOptional()
+  @IsBoolean()
+  allowFullLabelDisclosure?: boolean;
+
+  @IsOptional()
+  @IsIn(['NO_RETAIN', 'SHORT_RETENTION', 'STANDARD_RETENTION'])
+  rawVerificationRetentionMode?:
+    | 'NO_RETAIN'
+    | 'SHORT_RETENTION'
+    | 'STANDARD_RETENTION';
+
+  @IsOptional()
+  @Type(() => Number)
+  @Min(1)
+  @Max(720)
+  rawVerificationRetentionHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  encryptAuditExports?: boolean;
 }

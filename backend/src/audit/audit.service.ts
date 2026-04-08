@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   AuditActorType,
   AuditExportFormat,
   AuditExportStatus,
   Prisma,
 } from '@prisma/client';
+import {
+  openSealedString,
+  sealString,
+} from '../common/security/sealed-data.util';
+import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAuditExportDto } from './dto/create-audit-export.dto';
 
@@ -32,7 +38,10 @@ interface ListPartnerAuditLogsParams {
 
 @Injectable()
 export class AuditService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
+  ) {}
 
   async recordEvent(
     input: RecordAuditEventInput,
@@ -106,7 +115,7 @@ export class AuditService {
   }
 
   async listPartnerAuditExports(partnerId: string) {
-    return this.prismaService.auditExportJob.findMany({
+    const auditExports = await this.prismaService.auditExportJob.findMany({
       where: {
         partnerId,
       },
@@ -119,12 +128,18 @@ export class AuditService {
         status: true,
         downloadFilename: true,
         downloadMimeType: true,
+        downloadContent: true,
         expiresAt: true,
         completedAt: true,
         createdAt: true,
         updatedAt: true,
       },
     });
+
+    return auditExports.map((auditExport) => ({
+      ...auditExport,
+      downloadContent: this.readAuditExportContent(auditExport.downloadContent),
+    }));
   }
 
   async createAuditExport(
@@ -182,8 +197,17 @@ export class AuditService {
         ? 'application/json'
         : 'text/csv';
     const now = new Date();
+    const encryptAuditExports = await this.shouldEncryptAuditExports(partnerId);
+    const storedContent = encryptAuditExports
+      ? sealString(
+          serializedContent,
+          this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+            infer: true,
+          }),
+        )
+      : serializedContent;
 
-    return this.prismaService.auditExportJob.create({
+    const auditExport = await this.prismaService.auditExportJob.create({
       data: {
         partnerId,
         requestedByUserId,
@@ -198,7 +222,7 @@ export class AuditService {
         },
         downloadFilename: `audit-export-${now.toISOString().slice(0, 10)}.${fileExtension}`,
         downloadMimeType: mimeType,
-        downloadContent: serializedContent,
+        downloadContent: storedContent,
         expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
         completedAt: now,
       },
@@ -214,6 +238,11 @@ export class AuditService {
         createdAt: true,
       },
     });
+
+    return {
+      ...auditExport,
+      downloadContent: this.readAuditExportContent(auditExport.downloadContent),
+    };
   }
 
   async getAuditExportDownload(partnerId: string, exportId: string) {
@@ -238,7 +267,50 @@ export class AuditService {
       );
     }
 
-    return auditExport;
+    if (
+      auditExport.expiresAt &&
+      auditExport.expiresAt.getTime() <= Date.now()
+    ) {
+      await this.prismaService.auditExportJob.update({
+        where: {
+          id: auditExport.id,
+        },
+        data: {
+          status: AuditExportStatus.EXPIRED,
+          downloadContent: null,
+        },
+      });
+
+      return {
+        ...auditExport,
+        status: AuditExportStatus.EXPIRED,
+        downloadContent: null,
+      };
+    }
+
+    return {
+      ...auditExport,
+      downloadContent: this.readAuditExportContent(auditExport.downloadContent),
+    };
+  }
+
+  async cleanupExpiredAuditExports(): Promise<number> {
+    const expiredExports = await this.prismaService.auditExportJob.updateMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+        status: {
+          not: AuditExportStatus.EXPIRED,
+        },
+      },
+      data: {
+        status: AuditExportStatus.EXPIRED,
+        downloadContent: null,
+      },
+    });
+
+    return expiredExports.count;
   }
 
   private serializeAuditLogsCsv(
@@ -282,5 +354,41 @@ export class AuditService {
     );
 
     return [header.join(','), ...rows].join('\n');
+  }
+
+  private readAuditExportContent(value: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    return openSealedString(
+      value,
+      this.configService.get('DATA_ENCRYPTION_MASTER_SECRET', {
+        infer: true,
+      }),
+    );
+  }
+
+  private async shouldEncryptAuditExports(partnerId: string): Promise<boolean> {
+    const partnerSettings =
+      await this.prismaService.partnerSecuritySettings.findUnique({
+        where: {
+          partnerId,
+        },
+        select: {
+          encryptAuditExports: true,
+        },
+      });
+
+    if (partnerSettings) {
+      return partnerSettings.encryptAuditExports;
+    }
+
+    return this.configService.get(
+      'PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS',
+      {
+        infer: true,
+      },
+    );
   }
 }

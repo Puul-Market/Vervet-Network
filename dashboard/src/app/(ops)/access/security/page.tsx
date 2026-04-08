@@ -16,6 +16,8 @@ import {
   fetchPartnerSecuritySettings,
   humanizeDashboardError,
   type CredentialScope,
+  type PartnerDefaultDisclosureMode,
+  type PartnerRawVerificationRetentionMode,
 } from "@/lib/vervet-api";
 
 export const dynamic = "force-dynamic";
@@ -54,8 +56,33 @@ export default async function SecurityPage() {
             label="Rotation policy"
             value={`${settings.credentialRotationDays} days`}
           />
-          <SummaryCard label="MFA enforcement" value={settings.enforceMfa ? "Enabled" : "Disabled"} />
-          <SummaryCard label="IP allowlist entries" value={settings.ipAllowlist.length} />
+          <SummaryCard
+            label="Disclosure default"
+            value={formatDisclosureMode(
+              settings.defaultDisclosureMode,
+              settings.allowFullLabelDisclosure,
+            )}
+          />
+          <SummaryCard
+            hint="Raw verification request retention"
+            label="Verification retention"
+            value={formatRetentionMode(
+              settings.rawVerificationRetentionMode,
+              settings.rawVerificationRetentionHours,
+            )}
+          />
+          <SummaryCard
+            label="Audit exports"
+            value={settings.encryptAuditExports ? "Encrypted" : "Plaintext"}
+          />
+          <SummaryCard
+            label="MFA enforcement"
+            value={settings.enforceMfa ? "Enabled" : "Disabled"}
+          />
+          <SummaryCard
+            label="IP allowlist entries"
+            value={settings.ipAllowlist.length}
+          />
           <SummaryCard
             label="Production request"
             value={
@@ -122,6 +149,47 @@ export default async function SecurityPage() {
                 />
               </label>
             </div>
+            <div className="console-grid">
+              <label className="field">
+                <span>Default disclosure mode</span>
+                <select
+                  defaultValue={settings.defaultDisclosureMode}
+                  name="defaultDisclosureMode"
+                >
+                  <option value="VERIFICATION_ONLY">Verification only</option>
+                  <option value="MASKED_LABEL">Masked label</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Verification request retention</span>
+                <select
+                  defaultValue={settings.rawVerificationRetentionMode}
+                  name="rawVerificationRetentionMode"
+                >
+                  <option value="NO_RETAIN">No retain</option>
+                  <option value="SHORT_RETENTION">Short retention</option>
+                  <option value="STANDARD_RETENTION">
+                    Standard retention
+                  </option>
+                </select>
+              </label>
+            </div>
+            <div className="console-grid">
+              <label className="field">
+                <span>Short retention window (hours)</span>
+                <input
+                  defaultValue={settings.rawVerificationRetentionHours}
+                  max={720}
+                  min={1}
+                  name="rawVerificationRetentionHours"
+                  type="number"
+                />
+              </label>
+            </div>
+            <span className="field-hint">
+              Verification-only suppresses recipient labels. Masked-label keeps
+              operator context without disclosing the full recipient name.
+            </span>
             <label className="field">
               <span>IP allowlist</span>
               <textarea
@@ -132,12 +200,30 @@ export default async function SecurityPage() {
             </label>
             <label className="event-option">
               <input
+                defaultChecked={settings.allowFullLabelDisclosure}
+                disabled={!canWriteSecurity}
+                name="allowFullLabelDisclosure"
+                type="checkbox"
+              />
+              Allow full label disclosure for verified matches
+            </label>
+            <label className="event-option">
+              <input
                 defaultChecked={settings.enforceMfa}
                 disabled={!canWriteSecurity}
                 name="enforceMfa"
                 type="checkbox"
               />
               Require MFA for partner users
+            </label>
+            <label className="event-option">
+              <input
+                defaultChecked={settings.encryptAuditExports}
+                disabled={!canWriteSecurity}
+                name="encryptAuditExports"
+                type="checkbox"
+              />
+              Encrypt generated audit exports at rest
             </label>
             <button className="primary-button" disabled={!canWriteSecurity} type="submit">
               Save Security Settings
@@ -194,5 +280,31 @@ export default async function SecurityPage() {
         />
       </section>
     );
+  }
+}
+
+function formatDisclosureMode(
+  mode: PartnerDefaultDisclosureMode,
+  allowFullLabelDisclosure: boolean,
+) {
+  if (allowFullLabelDisclosure) {
+    return "Full label allowed";
+  }
+
+  return mode === "MASKED_LABEL" ? "Masked label" : "Verification only";
+}
+
+function formatRetentionMode(
+  mode: PartnerRawVerificationRetentionMode,
+  retentionHours: number,
+) {
+  switch (mode) {
+    case "NO_RETAIN":
+      return "No retain";
+    case "SHORT_RETENTION":
+      return `${retentionHours}h`;
+    case "STANDARD_RETENTION":
+    default:
+      return "Standard";
   }
 }

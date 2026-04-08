@@ -101,6 +101,13 @@ export type DisclosureMode =
   | "FULL_LABEL"
   | "MASKED_LABEL"
   | "VERIFICATION_ONLY";
+export type PartnerDefaultDisclosureMode =
+  | "MASKED_LABEL"
+  | "VERIFICATION_ONLY";
+export type PartnerRawVerificationRetentionMode =
+  | "NO_RETAIN"
+  | "SHORT_RETENTION"
+  | "STANDARD_RETENTION";
 export type LookupDirection =
   | "FORWARD_LOOKUP"
   | "REVERSE_LOOKUP"
@@ -597,6 +604,11 @@ export interface PartnerSecuritySettingsRecord {
   enforceMfa: boolean;
   ipAllowlist: string[];
   credentialRotationDays: number;
+  defaultDisclosureMode: PartnerDefaultDisclosureMode;
+  allowFullLabelDisclosure: boolean;
+  rawVerificationRetentionMode: PartnerRawVerificationRetentionMode;
+  rawVerificationRetentionHours: number;
+  encryptAuditExports: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -2022,6 +2034,11 @@ export async function updatePartnerSecuritySettings(
     enforceMfa?: boolean;
     ipAllowlist?: string[];
     credentialRotationDays?: number;
+    defaultDisclosureMode?: PartnerDefaultDisclosureMode;
+    allowFullLabelDisclosure?: boolean;
+    rawVerificationRetentionMode?: PartnerRawVerificationRetentionMode;
+    rawVerificationRetentionHours?: number;
+    encryptAuditExports?: boolean;
   },
 ) {
   return fetchApi<PartnerSecuritySettingsRecord>({

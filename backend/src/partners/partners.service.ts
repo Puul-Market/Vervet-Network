@@ -130,6 +130,11 @@ const partnerSecuritySettingsSelect = {
   enforceMfa: true,
   ipAllowlist: true,
   credentialRotationDays: true,
+  defaultDisclosureMode: true,
+  allowFullLabelDisclosure: true,
+  rawVerificationRetentionMode: true,
+  rawVerificationRetentionHours: true,
+  encryptAuditExports: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -895,6 +900,39 @@ export class PartnersService {
         updatePartnerSecuritySettingsDto.credentialRotationDays;
     }
 
+    if (updatePartnerSecuritySettingsDto.defaultDisclosureMode !== undefined) {
+      updateData.defaultDisclosureMode =
+        updatePartnerSecuritySettingsDto.defaultDisclosureMode;
+    }
+
+    if (
+      updatePartnerSecuritySettingsDto.allowFullLabelDisclosure !== undefined
+    ) {
+      updateData.allowFullLabelDisclosure =
+        updatePartnerSecuritySettingsDto.allowFullLabelDisclosure;
+    }
+
+    if (
+      updatePartnerSecuritySettingsDto.rawVerificationRetentionMode !==
+      undefined
+    ) {
+      updateData.rawVerificationRetentionMode =
+        updatePartnerSecuritySettingsDto.rawVerificationRetentionMode;
+    }
+
+    if (
+      updatePartnerSecuritySettingsDto.rawVerificationRetentionHours !==
+      undefined
+    ) {
+      updateData.rawVerificationRetentionHours =
+        updatePartnerSecuritySettingsDto.rawVerificationRetentionHours;
+    }
+
+    if (updatePartnerSecuritySettingsDto.encryptAuditExports !== undefined) {
+      updateData.encryptAuditExports =
+        updatePartnerSecuritySettingsDto.encryptAuditExports;
+    }
+
     if (Object.keys(updateData).length === 0) {
       throw new BadRequestException(
         'At least one security settings field must be updated.',
@@ -924,6 +962,13 @@ export class PartnersService {
             enforceMfa: updatedSettings.enforceMfa,
             ipAllowlist: updatedSettings.ipAllowlist,
             credentialRotationDays: updatedSettings.credentialRotationDays,
+            defaultDisclosureMode: updatedSettings.defaultDisclosureMode,
+            allowFullLabelDisclosure: updatedSettings.allowFullLabelDisclosure,
+            rawVerificationRetentionMode:
+              updatedSettings.rawVerificationRetentionMode,
+            rawVerificationRetentionHours:
+              updatedSettings.rawVerificationRetentionHours,
+            encryptAuditExports: updatedSettings.encryptAuditExports,
           },
         },
         transaction,
@@ -2736,6 +2781,30 @@ export class PartnersService {
         ),
         credentialRotationDays: this.configService.get(
           'PARTNER_SECURITY_DEFAULT_CREDENTIAL_ROTATION_DAYS',
+          {
+            infer: true,
+          },
+        ),
+        defaultDisclosureMode: this.configService.get(
+          'PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE',
+          {
+            infer: true,
+          },
+        ),
+        rawVerificationRetentionMode: this.configService.get(
+          'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE',
+          {
+            infer: true,
+          },
+        ),
+        rawVerificationRetentionHours: this.configService.get(
+          'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS',
+          {
+            infer: true,
+          },
+        ),
+        encryptAuditExports: this.configService.get(
+          'PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS',
           {
             infer: true,
           },

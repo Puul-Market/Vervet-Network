@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { setDashboardFlash } from "@/lib/flash";
-import { readOptionalTextField } from "@/lib/form-input";
+import {
+  readCheckboxField,
+  readOptionalTextField,
+  readRequiredEnumField,
+} from "@/lib/form-input";
 import { clearDashboardSession, getDashboardSession } from "@/lib/session";
 import {
   DashboardAuthError,
   humanizeDashboardError,
+  type PartnerDefaultDisclosureMode,
+  type PartnerRawVerificationRetentionMode,
   updatePartnerSecuritySettings,
 } from "@/lib/vervet-api";
 
@@ -23,13 +29,50 @@ export async function POST(request: Request) {
     formData.get("credentialRotationDays"),
   );
   const ipAllowlist = readOptionalTextField(formData.get("ipAllowlist"));
-  const enforceMfa = formData.get("enforceMfa") === "on";
+  const defaultDisclosureMode =
+    readRequiredEnumField<PartnerDefaultDisclosureMode>(
+      formData.get("defaultDisclosureMode"),
+    );
+  const allowFullLabelDisclosure = readCheckboxField(
+    formData.get("allowFullLabelDisclosure"),
+  );
+  const rawVerificationRetentionMode =
+    readRequiredEnumField<PartnerRawVerificationRetentionMode>(
+      formData.get("rawVerificationRetentionMode"),
+    );
+  const rawVerificationRetentionHours = readPositiveInteger(
+    formData.get("rawVerificationRetentionHours"),
+  );
+  const enforceMfa = readCheckboxField(formData.get("enforceMfa"));
+  const encryptAuditExports = readCheckboxField(
+    formData.get("encryptAuditExports"),
+  );
 
-  if (!sessionIdleTimeoutMinutes || !credentialRotationDays) {
+  if (
+    !sessionIdleTimeoutMinutes ||
+    !credentialRotationDays ||
+    !defaultDisclosureMode ||
+    !rawVerificationRetentionMode
+  ) {
     await setDashboardFlash({
       level: "error",
       title: "Security settings failed",
-      message: "Session timeout and rotation period must be positive numbers.",
+      message:
+        "Session, rotation, disclosure, and retention settings must be valid values.",
+    });
+
+    return NextResponse.redirect(new URL("/access/security", request.url), 303);
+  }
+
+  if (
+    rawVerificationRetentionMode === "SHORT_RETENTION" &&
+    !rawVerificationRetentionHours
+  ) {
+    await setDashboardFlash({
+      level: "error",
+      title: "Security settings failed",
+      message:
+        "Short-retention mode requires a positive retention window in hours.",
     });
 
     return NextResponse.redirect(new URL("/access/security", request.url), 303);
@@ -40,6 +83,14 @@ export async function POST(request: Request) {
       sessionIdleTimeoutMinutes,
       credentialRotationDays,
       enforceMfa,
+      defaultDisclosureMode,
+      allowFullLabelDisclosure,
+      rawVerificationRetentionMode,
+      rawVerificationRetentionHours:
+        rawVerificationRetentionMode === "SHORT_RETENTION"
+          ? rawVerificationRetentionHours ?? undefined
+          : undefined,
+      encryptAuditExports,
       ipAllowlist: ipAllowlist
         ? ipAllowlist
             .split("\n")

@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables } from '../config/environment';
 import { ResolutionService } from '../resolution/resolution.service';
@@ -20,6 +21,7 @@ export class WebhookDeliveryProcessorService
 
   constructor(
     private readonly configService: ConfigService<EnvironmentVariables, true>,
+    private readonly auditService: AuditService,
     private readonly webhooksService: WebhooksService,
     private readonly requestHardeningService: RequestHardeningService,
     private readonly resolutionService: ResolutionService,
@@ -76,6 +78,8 @@ export class WebhookDeliveryProcessorService
             infer: true,
           }),
         );
+      const expiredAuditExportCount =
+        await this.auditService.cleanupExpiredAuditExports();
       const result = await this.webhooksService.processPendingDeliveries({
         limit: this.configService.get('WEBHOOK_DELIVERY_PROCESSOR_BATCH_SIZE', {
           infer: true,
@@ -85,14 +89,16 @@ export class WebhookDeliveryProcessorService
       if (
         result.processedCount > 0 ||
         expiredNonceCount > 0 ||
-        deletedResolutionRequestCount > 0
+        deletedResolutionRequestCount > 0 ||
+        expiredAuditExportCount > 0
       ) {
         this.logger.log(
           `Processed ${result.processedCount} webhook deliveries. ` +
             `Succeeded=${result.succeededCount} Rescheduled=${result.rescheduledCount} ` +
             `Abandoned=${result.abandonedCount} Skipped=${result.skippedCount} ` +
             `ExpiredNoncesDeleted=${expiredNonceCount} ` +
-            `ResolutionRequestsDeleted=${deletedResolutionRequestCount}`,
+            `ResolutionRequestsDeleted=${deletedResolutionRequestCount} ` +
+            `AuditExportsExpired=${expiredAuditExportCount}`,
         );
       }
     } catch (error: unknown) {

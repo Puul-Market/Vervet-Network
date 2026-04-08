@@ -38,12 +38,17 @@ import { ResolveRecipientDto } from './dto/resolve-recipient.dto';
 import { VerifyDestinationDto } from './dto/verify-destination.dto';
 
 type DisclosureMode = 'FULL_LABEL' | 'MASKED_LABEL' | 'VERIFICATION_ONLY';
+type StoredDisclosureMode = Exclude<DisclosureMode, 'FULL_LABEL'>;
 type LookupDirection =
   | 'FORWARD_LOOKUP'
   | 'REVERSE_LOOKUP'
   | 'TRANSFER_VERIFICATION';
 type BatchLookupMode = 'BY_RECIPIENT' | 'BY_ADDRESS' | 'MIXED';
 type BatchRowLookupMode = Exclude<BatchLookupMode, 'MIXED'>;
+type RawVerificationRetentionMode =
+  | 'NO_RETAIN'
+  | 'SHORT_RETENTION'
+  | 'STANDARD_RETENTION';
 
 interface CandidatePlatform extends Prisma.JsonObject {
   id: string;
@@ -97,6 +102,13 @@ interface NormalizedConfirmInput {
 interface ResolutionRequestContext {
   authenticatedPartner: AuthenticatedPartner;
   idempotencyKey: string | null;
+}
+
+interface PartnerPrivacySettings {
+  defaultDisclosureMode: StoredDisclosureMode;
+  allowFullLabelDisclosure: boolean;
+  rawVerificationRetentionMode: RawVerificationRetentionMode;
+  rawVerificationRetentionHours: number;
 }
 
 export interface ResolveResponse extends Record<string, Prisma.JsonValue> {
@@ -219,6 +231,13 @@ export class ResolutionService {
       return idempotentResponse;
     }
 
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const retentionExpiresAt = this.buildRetentionExpiresAt(
+      requesterPrivacySettings,
+    );
+
     const lookupDecision =
       await this.requestHardeningService.evaluateResolutionLookup({
         partnerId: requestContext.authenticatedPartner.partnerId,
@@ -246,7 +265,7 @@ export class ResolutionService {
     const lookup = await this.lookupVerifiedDestination(lookupInput);
     const response: ResolveResponse = {
       lookupDirection: 'FORWARD_LOOKUP',
-      disclosureMode: lookup.disclosureMode ?? 'FULL_LABEL',
+      disclosureMode: lookup.disclosureMode ?? 'VERIFICATION_ONLY',
       recipientDisplayName: lookup.recipientDisplayName ?? null,
       platform: lookup.platform ?? null,
       address: lookup.address ?? null,
@@ -273,6 +292,7 @@ export class ResolutionService {
         normalizedAddress: null,
         idempotencyKey: requestContext.idempotencyKey,
         requestFingerprint,
+        retentionExpiresAt,
         responseData: response,
         metadata: {
           lookupDirection: response.lookupDirection,
@@ -321,6 +341,13 @@ export class ResolutionService {
     if (idempotentResponse) {
       return idempotentResponse;
     }
+
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const retentionExpiresAt = this.buildRetentionExpiresAt(
+      requesterPrivacySettings,
+    );
 
     const lookupDecision =
       await this.requestHardeningService.evaluateResolutionLookup({
@@ -379,6 +406,7 @@ export class ResolutionService {
         normalizedAddress: lookupInput.addressNormalized,
         idempotencyKey: requestContext.idempotencyKey,
         requestFingerprint,
+        retentionExpiresAt,
         responseData: response,
         metadata: {
           lookupDirection: response.lookupDirection,
@@ -435,6 +463,13 @@ export class ResolutionService {
     if (idempotentResponse) {
       return idempotentResponse;
     }
+
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const retentionExpiresAt = this.buildRetentionExpiresAt(
+      requesterPrivacySettings,
+    );
 
     const lookupDecision =
       await this.requestHardeningService.evaluateResolutionLookup({
@@ -493,7 +528,7 @@ export class ResolutionService {
 
     const response: VerifyResponse = {
       lookupDirection: 'TRANSFER_VERIFICATION',
-      disclosureMode: lookup.disclosureMode ?? 'FULL_LABEL',
+      disclosureMode: lookup.disclosureMode ?? 'VERIFICATION_ONLY',
       match,
       verified: lookup.verified && match,
       recipientDisplayName: lookup.recipientDisplayName ?? null,
@@ -517,6 +552,7 @@ export class ResolutionService {
         normalizedAddress,
         idempotencyKey: requestContext.idempotencyKey,
         requestFingerprint,
+        retentionExpiresAt,
         responseData: response,
         metadata: {
           lookupDirection: response.lookupDirection,
@@ -596,6 +632,12 @@ export class ResolutionService {
         id: true,
       },
     });
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const retentionExpiresAt = this.buildRetentionExpiresAt(
+      requesterPrivacySettings,
+    );
 
     const rows: BatchVerifyRowResponse[] = [];
     let verifiedRows = 0;
@@ -655,6 +697,7 @@ export class ResolutionService {
             normalizedAddress: evaluation.normalizedAddress,
             idempotencyKey: null,
             requestFingerprint,
+            retentionExpiresAt,
             responseData: evaluation.response,
             metadata: {
               lookupMode: rowLookupMode,
@@ -676,6 +719,7 @@ export class ResolutionService {
               riskLevel: evaluation.lookup.riskLevel,
               recommendation: evaluation.lookup.recommendation,
               flags: evaluation.lookup.flags,
+              retentionExpiresAt,
               responseData: {
                 ...evaluation.response,
                 lookupMode: rowLookupMode,
@@ -739,6 +783,7 @@ export class ResolutionService {
             normalizedAddress: evaluation.lookupInput.addressNormalized,
             idempotencyKey: null,
             requestFingerprint,
+            retentionExpiresAt,
             responseData: evaluation.response,
             metadata: {
               lookupMode: rowLookupMode,
@@ -760,6 +805,7 @@ export class ResolutionService {
               riskLevel: evaluation.lookup.riskLevel,
               recommendation: evaluation.lookup.recommendation,
               flags: evaluation.lookup.flags,
+              retentionExpiresAt,
               responseData: {
                 ...evaluation.response,
                 lookupMode: rowLookupMode,
@@ -820,6 +866,7 @@ export class ResolutionService {
             recommendation:
               error instanceof Error ? error.message : 'invalid_request',
             flags: [RiskSignalKind.ADDRESS_MISMATCH],
+            retentionExpiresAt,
             responseData: rowResponse,
           },
         });
@@ -1081,16 +1128,45 @@ export class ResolutionService {
     retentionMs: number,
   ): Promise<number> {
     const cutoff = new Date(Date.now() - retentionMs);
+    const now = new Date();
+    const deletedBatchRows =
+      await this.prismaService.resolutionBatchRow.deleteMany({
+        where: {
+          OR: [
+            {
+              retentionExpiresAt: {
+                lte: now,
+              },
+            },
+            {
+              retentionExpiresAt: null,
+              createdAt: {
+                lt: cutoff,
+              },
+            },
+          ],
+        },
+      });
     const deletedRequests =
       await this.prismaService.resolutionRequest.deleteMany({
         where: {
-          requestedAt: {
-            lt: cutoff,
-          },
+          OR: [
+            {
+              retentionExpiresAt: {
+                lte: now,
+              },
+            },
+            {
+              retentionExpiresAt: null,
+              requestedAt: {
+                lt: cutoff,
+              },
+            },
+          ],
         },
       });
 
-    return deletedRequests.count;
+    return deletedBatchRows.count + deletedRequests.count;
   }
 
   private normalizeLookupInput(
@@ -1188,9 +1264,19 @@ export class ResolutionService {
         recommendation: 'recipient_not_found',
         flags: [RiskSignalKind.IDENTIFIER_MISMATCH],
         verified: false,
-        disclosureMode: 'FULL_LABEL',
+        disclosureMode: 'VERIFICATION_ONLY',
       };
     }
+
+    const ownerPrivacySettings = await this.getPartnerPrivacySettings(
+      identifier.recipient.partner.id,
+    );
+    const disclosure = this.applyDisclosurePolicy(
+      ownerPrivacySettings,
+      identifier.recipient.displayName ??
+        identifier.rawValue ??
+        identifier.recipient.externalRecipientId,
+    );
 
     const assetNetwork = await this.findAssetNetworkForLookup({
       chainNormalized: lookupInput.chainNormalized,
@@ -1205,9 +1291,9 @@ export class ResolutionService {
         recommendation: 'unsupported_asset_network',
         flags: [RiskSignalKind.UNSUPPORTED_ASSET_NETWORK],
         verified: false,
-        recipientDisplayName: identifier.recipient.displayName,
+        recipientDisplayName: disclosure.recipientDisplayName,
         platform: identifier.recipient.partner.slug,
-        disclosureMode: 'FULL_LABEL',
+        disclosureMode: disclosure.disclosureMode,
       };
     }
 
@@ -1224,9 +1310,9 @@ export class ResolutionService {
         recommendation: 'no_verified_destination',
         flags: [RiskSignalKind.ADDRESS_NOT_ATTESTED],
         verified: false,
-        recipientDisplayName: identifier.recipient.displayName,
+        recipientDisplayName: disclosure.recipientDisplayName,
         platform: identifier.recipient.partner.slug,
-        disclosureMode: 'FULL_LABEL',
+        disclosureMode: disclosure.disclosureMode,
       };
     }
 
@@ -1237,9 +1323,9 @@ export class ResolutionService {
         recommendation: 'manual_review_required',
         flags: [RiskSignalKind.MULTIPLE_ACTIVE_DESTINATIONS],
         verified: false,
-        recipientDisplayName: identifier.recipient.displayName,
+        recipientDisplayName: disclosure.recipientDisplayName,
         platform: identifier.recipient.partner.slug,
-        disclosureMode: 'FULL_LABEL',
+        disclosureMode: disclosure.disclosureMode,
       };
     }
 
@@ -1260,7 +1346,7 @@ export class ResolutionService {
       recommendation: 'safe_to_send',
       flags: [],
       verified: true,
-      recipientDisplayName: identifier.recipient.displayName,
+      recipientDisplayName: disclosure.recipientDisplayName,
       platform: identifier.recipient.partner.slug,
       address: destination.addressRaw,
       chain: assetNetwork.chain.slug,
@@ -1270,7 +1356,7 @@ export class ResolutionService {
       identifierId: identifier.id,
       destinationId: destination.id,
       attestationId: latestAttestation?.id,
-      disclosureMode: 'FULL_LABEL',
+      disclosureMode: disclosure.disclosureMode,
     };
   }
 
@@ -1431,9 +1517,13 @@ export class ResolutionService {
       destination.recipient.displayName ??
       primaryIdentifier?.rawValue ??
       destination.recipient.externalRecipientId;
-    const disclosureMode: DisclosureMode = recipientDisplayName
-      ? 'FULL_LABEL'
-      : 'VERIFICATION_ONLY';
+    const ownerPrivacySettings = await this.getPartnerPrivacySettings(
+      destination.recipient.partner.id,
+    );
+    const disclosure = this.applyDisclosurePolicy(
+      ownerPrivacySettings,
+      recipientDisplayName,
+    );
 
     return {
       outcome: ResolutionOutcome.RESOLVED,
@@ -1441,8 +1531,7 @@ export class ResolutionService {
       recommendation: 'safe_to_send',
       flags: [],
       verified: true,
-      recipientDisplayName:
-        disclosureMode === 'FULL_LABEL' ? recipientDisplayName : null,
+      recipientDisplayName: disclosure.recipientDisplayName,
       platform: destination.recipient.partner.slug,
       chain: assetNetwork.chain.slug,
       asset: assetNetwork.asset.symbol,
@@ -1451,7 +1540,7 @@ export class ResolutionService {
       identifierId: primaryIdentifier?.id,
       destinationId: destination.id,
       attestationId: latestAttestation?.id,
-      disclosureMode,
+      disclosureMode: disclosure.disclosureMode,
       candidatePlatforms: [],
       requiresPlatformSelection: false,
     };
@@ -1522,7 +1611,7 @@ export class ResolutionService {
       normalizedAddress,
       response: {
         lookupDirection: 'TRANSFER_VERIFICATION',
-        disclosureMode: lookup.disclosureMode ?? 'FULL_LABEL',
+        disclosureMode: lookup.disclosureMode ?? 'VERIFICATION_ONLY',
         match,
         verified: lookup.verified && match,
         recipientDisplayName: lookup.recipientDisplayName ?? null,
@@ -1720,6 +1809,12 @@ export class ResolutionService {
     providedAddressNormalized: string | null;
     lookupDecision: Exclude<ResolutionLookupDecision, { allowed: true }>;
   }): Promise<never> {
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      params.authenticatedPartner.partnerId,
+    );
+    const retentionExpiresAt = this.buildRetentionExpiresAt(
+      requesterPrivacySettings,
+    );
     const request = await this.recordResolutionRequest({
       queryType: params.queryType,
       requesterPartnerId: params.authenticatedPartner.partnerId,
@@ -1732,6 +1827,7 @@ export class ResolutionService {
       normalizedAddress: params.providedAddressNormalized,
       idempotencyKey: null,
       requestFingerprint: null,
+      retentionExpiresAt,
       responseData: null,
       metadata: params.lookupDecision.metadata,
       lookup: {
@@ -1780,6 +1876,7 @@ export class ResolutionService {
     normalizedAddress: string | null;
     idempotencyKey: string | null;
     requestFingerprint: string | null;
+    retentionExpiresAt: Date | null;
     responseData: Prisma.InputJsonValue | null;
     metadata?: Prisma.InputJsonValue;
     lookup: LookupResult;
@@ -1804,6 +1901,7 @@ export class ResolutionService {
       recommendation: params.lookup.recommendation,
       flags: params.lookup.flags,
       respondedAt: new Date(),
+      retentionExpiresAt: params.retentionExpiresAt,
     };
 
     if (params.idempotencyKey) {
@@ -1896,7 +1994,161 @@ export class ResolutionService {
       return metadataDisclosureMode;
     }
 
-    return 'FULL_LABEL';
+    return 'VERIFICATION_ONLY';
+  }
+
+  private async getPartnerPrivacySettings(
+    partnerId: string,
+  ): Promise<PartnerPrivacySettings> {
+    const settings =
+      await this.prismaService.partnerSecuritySettings.findUnique({
+        where: {
+          partnerId,
+        },
+        select: {
+          defaultDisclosureMode: true,
+          allowFullLabelDisclosure: true,
+          rawVerificationRetentionMode: true,
+          rawVerificationRetentionHours: true,
+        },
+      });
+
+    const defaultDisclosureMode = this.readStoredDisclosureMode(
+      settings?.defaultDisclosureMode,
+      this.configService.get('PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE', {
+        infer: true,
+      }),
+    );
+    const allowFullLabelDisclosure =
+      settings?.allowFullLabelDisclosure ?? false;
+    const rawVerificationRetentionMode = this.readRawVerificationRetentionMode(
+      settings?.rawVerificationRetentionMode,
+      this.configService.get(
+        'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE',
+        {
+          infer: true,
+        },
+      ),
+    );
+    const rawVerificationRetentionHours =
+      settings?.rawVerificationRetentionHours ??
+      this.configService.get(
+        'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS',
+        {
+          infer: true,
+        },
+      ) ??
+      24;
+
+    return {
+      defaultDisclosureMode,
+      allowFullLabelDisclosure,
+      rawVerificationRetentionMode,
+      rawVerificationRetentionHours,
+    };
+  }
+
+  private buildRetentionExpiresAt(
+    settings: PartnerPrivacySettings,
+  ): Date | null {
+    switch (settings.rawVerificationRetentionMode) {
+      case 'NO_RETAIN':
+        return new Date();
+      case 'SHORT_RETENTION':
+        return new Date(
+          Date.now() + settings.rawVerificationRetentionHours * 60 * 60 * 1000,
+        );
+      case 'STANDARD_RETENTION':
+      default:
+        return null;
+    }
+  }
+
+  private applyDisclosurePolicy(
+    settings: PartnerPrivacySettings,
+    value: string | null | undefined,
+  ): { disclosureMode: DisclosureMode; recipientDisplayName: string | null } {
+    if (!value) {
+      return {
+        disclosureMode: 'VERIFICATION_ONLY',
+        recipientDisplayName: null,
+      };
+    }
+
+    if (settings.allowFullLabelDisclosure) {
+      return {
+        disclosureMode: 'FULL_LABEL',
+        recipientDisplayName: value,
+      };
+    }
+
+    if (settings.defaultDisclosureMode === 'MASKED_LABEL') {
+      return {
+        disclosureMode: 'MASKED_LABEL',
+        recipientDisplayName: this.maskRecipientDisplayName(value),
+      };
+    }
+
+    return {
+      disclosureMode: 'VERIFICATION_ONLY',
+      recipientDisplayName: null,
+    };
+  }
+
+  private maskRecipientDisplayName(value: string): string {
+    const trimmedValue = value.trim();
+
+    if (trimmedValue.length <= 2) {
+      return `${trimmedValue[0] ?? '*'}*`;
+    }
+
+    const segments = trimmedValue
+      .split(/\s+/)
+      .filter((segment) => segment.length > 0);
+
+    if (segments.length > 1) {
+      return segments
+        .map((segment, index) => {
+          if (segment.length <= 1) {
+            return '*';
+          }
+
+          if (index === segments.length - 1) {
+            return `${segment[0]}.`;
+          }
+
+          return `${segment.slice(0, 2)}***`;
+        })
+        .join(' ');
+    }
+
+    return `${trimmedValue.slice(0, 2)}***`;
+  }
+
+  private readStoredDisclosureMode(
+    value: string | null | undefined,
+    fallback: StoredDisclosureMode,
+  ): StoredDisclosureMode {
+    if (value === 'MASKED_LABEL' || value === 'VERIFICATION_ONLY') {
+      return value;
+    }
+
+    return fallback;
+  }
+
+  private readRawVerificationRetentionMode(
+    value: string | null | undefined,
+    fallback: RawVerificationRetentionMode,
+  ): RawVerificationRetentionMode {
+    if (
+      value === 'NO_RETAIN' ||
+      value === 'SHORT_RETENTION' ||
+      value === 'STANDARD_RETENTION'
+    ) {
+      return value;
+    }
+
+    return fallback;
   }
 
   private readBatchLookupMode(value: string | undefined): BatchLookupMode {

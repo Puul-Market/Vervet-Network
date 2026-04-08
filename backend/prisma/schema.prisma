@@ -368,6 +368,11 @@ model PartnerSecuritySettings {
   enforceMfa                 Boolean  @default(false)
   ipAllowlist                String[]
   credentialRotationDays     Int      @default(90)
+  defaultDisclosureMode      String   @default("VERIFICATION_ONLY")
+  allowFullLabelDisclosure   Boolean  @default(false)
+  rawVerificationRetentionMode String @default("SHORT_RETENTION")
+  rawVerificationRetentionHours Int   @default(24)
+  encryptAuditExports        Boolean  @default(true)
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
   partner                    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
@@ -646,6 +651,7 @@ model ResolutionRequest {
   requestFingerprint        String?
   requestedAt               DateTime            @default(now())
   respondedAt               DateTime?
+  retentionExpiresAt        DateTime?
   responseData              Json?
   metadata                  Json?
   requesterPartner          Partner?            @relation("RequesterPartner", fields: [requesterPartnerId], references: [id], onDelete: SetNull)
@@ -699,6 +705,7 @@ model ResolutionBatchRow {
   riskLevel                RiskLevel
   recommendation           String?
   flags                    String[]
+  retentionExpiresAt       DateTime?
   responseData             Json?
   createdAt                DateTime           @default(now())
   batchRun                 ResolutionBatchRun @relation(fields: [batchRunId], references: [id], onDelete: Cascade)

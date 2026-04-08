@@ -1,4 +1,9 @@
 type NodeEnvironment = 'development' | 'test' | 'production';
+type PartnerDisclosureMode = 'MASKED_LABEL' | 'VERIFICATION_ONLY';
+type RawVerificationRetentionMode =
+  | 'NO_RETAIN'
+  | 'SHORT_RETENTION'
+  | 'STANDARD_RETENTION';
 
 export interface EnvironmentVariables {
   NODE_ENV: NodeEnvironment;
@@ -20,6 +25,10 @@ export interface EnvironmentVariables {
   PARTNER_USER_INVITE_TTL_MS: number;
   PARTNER_SECURITY_DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES: number;
   PARTNER_SECURITY_DEFAULT_CREDENTIAL_ROTATION_DAYS: number;
+  PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE: PartnerDisclosureMode;
+  PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE: RawVerificationRetentionMode;
+  PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS: number;
+  PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS: boolean;
   RESOLUTION_REQUEST_RETENTION_MS: number;
   RESOLUTION_LOOKUP_RATE_LIMIT_WINDOW_MS: number;
   RESOLUTION_LOOKUP_RATE_LIMIT_MAX_REQUESTS: number;
@@ -27,6 +36,7 @@ export interface EnvironmentVariables {
   RESOLUTION_LOOKUP_ENUMERATION_MAX_IDENTIFIERS: number;
   RESOLUTION_BATCH_MAX_ROWS: number;
   AUDIT_EXPORT_RETENTION_MS: number;
+  DATA_ENCRYPTION_MASTER_SECRET: string;
 }
 
 const allowedNodeEnvironments: readonly NodeEnvironment[] = [
@@ -122,6 +132,28 @@ export function validateEnvironment(
       90,
       'PARTNER_SECURITY_DEFAULT_CREDENTIAL_ROTATION_DAYS',
     ),
+    PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE: parseDisclosureMode(
+      config.PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE,
+      'VERIFICATION_ONLY',
+      'PARTNER_SECURITY_DEFAULT_DISCLOSURE_MODE',
+    ),
+    PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE:
+      parseRawVerificationRetentionMode(
+        config.PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE,
+        'SHORT_RETENTION',
+        'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE',
+      ),
+    PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS:
+      parsePositiveInteger(
+        config.PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS,
+        24,
+        'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_HOURS',
+      ),
+    PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS: parseBoolean(
+      config.PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS,
+      true,
+      'PARTNER_SECURITY_DEFAULT_ENCRYPT_AUDIT_EXPORTS',
+    ),
     RESOLUTION_REQUEST_RETENTION_MS: parsePositiveInteger(
       config.RESOLUTION_REQUEST_RETENTION_MS,
       2_592_000_000,
@@ -156,6 +188,11 @@ export function validateEnvironment(
       config.AUDIT_EXPORT_RETENTION_MS,
       604_800_000,
       'AUDIT_EXPORT_RETENTION_MS',
+    ),
+    DATA_ENCRYPTION_MASTER_SECRET: parseRequiredString(
+      config.DATA_ENCRYPTION_MASTER_SECRET ??
+        config.WEBHOOK_SIGNING_MASTER_SECRET,
+      'DATA_ENCRYPTION_MASTER_SECRET',
     ),
   };
 }
@@ -248,6 +285,44 @@ function parsePositiveInteger(
   }
 
   throw new Error(`${key} must be a positive integer.`);
+}
+
+function parseDisclosureMode(
+  value: unknown,
+  defaultValue: PartnerDisclosureMode,
+  key: string,
+): PartnerDisclosureMode {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  if (value === 'MASKED_LABEL' || value === 'VERIFICATION_ONLY') {
+    return value;
+  }
+
+  throw new Error(`${key} must be 'MASKED_LABEL' or 'VERIFICATION_ONLY'.`);
+}
+
+function parseRawVerificationRetentionMode(
+  value: unknown,
+  defaultValue: RawVerificationRetentionMode,
+  key: string,
+): RawVerificationRetentionMode {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  if (
+    value === 'NO_RETAIN' ||
+    value === 'SHORT_RETENTION' ||
+    value === 'STANDARD_RETENTION'
+  ) {
+    return value;
+  }
+
+  throw new Error(
+    `${key} must be 'NO_RETAIN', 'SHORT_RETENTION', or 'STANDARD_RETENTION'.`,
+  );
 }
 
 function parseStringList(
