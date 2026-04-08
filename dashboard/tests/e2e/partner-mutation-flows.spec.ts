@@ -57,7 +57,7 @@ test.describe("partner and admin mutation flows", () => {
     await page.goto("/webhooks");
 
     const label = uniqueValue("playwright-webhook");
-    const endpointUrl = `https://${label}.example.com/webhooks/vervet`;
+    const endpointUrl = buildWebhookEndpointUrl(label);
     const createWebhookForm = page.locator('form[action="/webhooks/actions/create"]');
 
     await createWebhookForm.getByLabel("Label").fill(label);
@@ -184,4 +184,8 @@ async function signInAdminSetup(page: Page) {
 
 function uniqueValue(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function buildWebhookEndpointUrl(label: string) {
+  return `https://example.com/webhooks/${encodeURIComponent(label)}`;
 }

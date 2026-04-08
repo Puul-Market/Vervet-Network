@@ -108,7 +108,7 @@ test.describe("partner onboarding and approval flows", () => {
     await webhookForm.getByLabel("Label").fill(webhookLabel);
     await webhookForm
       .getByLabel("Endpoint URL")
-      .fill(`https://${webhookLabel}.example.com/webhooks/vervet`);
+      .fill(buildWebhookEndpointUrl(webhookLabel));
     await webhookForm.getByRole("button", { name: "Create Webhook" }).click();
 
     await expect(page.getByText("Endpoint created")).toBeVisible();
@@ -196,4 +196,8 @@ async function signInAdminSetup(page: Page) {
 
 function uniqueValue(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function buildWebhookEndpointUrl(label: string) {
+  return `https://example.com/webhooks/${encodeURIComponent(label)}`;
 }
