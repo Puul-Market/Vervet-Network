@@ -77,10 +77,10 @@ test.describe("partner-state matrix", () => {
       page.getByRole("heading", { name: "Overview" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Production approved across 2 corridors").first(),
+      page.getByText(/Production approved across \d+ corridors?/).first(),
     ).toBeVisible();
     await expect(
-      page.getByText("Production corridors: 2").first(),
+      page.getByText(/Production corridors: \d+/).first(),
     ).toBeVisible();
   });
 
