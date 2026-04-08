@@ -63,7 +63,6 @@ jobs:
       CORS_ALLOWED_ORIGINS: http://localhost:3001
       VERVET_API_BASE_URL: http://localhost:3000
       DASHBOARD_SESSION_SECRET: ci-dashboard-session-secret-2026-03-14
-      NODE_ENV: production
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -123,10 +122,14 @@ jobs:
 
       - name: Start backend
         working-directory: backend
+        env:
+          NODE_ENV: production
         run: nohup npm run start:prod > ci-backend.log 2>&1 &
 
       - name: Start dashboard
         working-directory: dashboard
+        env:
+          NODE_ENV: production
         run: nohup env PORT=3001 npm run start > ci-dashboard.log 2>&1 &
 
       - name: Wait for backend and dashboard
