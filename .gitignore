@@ -29,3 +29,7 @@ backend/prisma/migrations/**/migration_lock.toml
 
 # Misc
 *.tsbuildinfo
+
+# AI Agent Artifacts
+/*.md
+!/README.md
