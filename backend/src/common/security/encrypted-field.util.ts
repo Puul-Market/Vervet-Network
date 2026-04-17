@@ -17,7 +17,7 @@ export function openEncryptedField(
   masterSecret: string,
 ): string {
   if (envelope.alg !== 'AES-256-GCM') {
-    throw new Error(`Unsupported encrypted field algorithm '${envelope.alg}'.`);
+    throw new Error('Unsupported encrypted field algorithm.');
   }
 
   const iv = decodeBase64(envelope.iv, 'iv');
