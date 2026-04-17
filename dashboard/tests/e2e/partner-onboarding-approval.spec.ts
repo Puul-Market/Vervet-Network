@@ -128,7 +128,7 @@ test.describe("partner onboarding and approval flows", () => {
         .getByText("merchant@ivorypay", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText("Verification only", { exact: true }),
+      page.getByText("Verification Only", { exact: true }),
     ).toBeVisible();
 
     await page.goto("/setup");
