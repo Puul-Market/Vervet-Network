@@ -132,9 +132,13 @@ const partnerSecuritySettingsSelect = {
   credentialRotationDays: true,
   defaultDisclosureMode: true,
   allowFullLabelDisclosure: true,
+  enableEncryptedSubmission: true,
   rawVerificationRetentionMode: true,
   rawVerificationRetentionHours: true,
   encryptAuditExports: true,
+  enterpriseByokEnabled: true,
+  customerKeyArn: true,
+  customerKeyStatus: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -913,6 +917,13 @@ export class PartnersService {
     }
 
     if (
+      updatePartnerSecuritySettingsDto.enableEncryptedSubmission !== undefined
+    ) {
+      updateData.enableEncryptedSubmission =
+        updatePartnerSecuritySettingsDto.enableEncryptedSubmission;
+    }
+
+    if (
       updatePartnerSecuritySettingsDto.rawVerificationRetentionMode !==
       undefined
     ) {
@@ -964,11 +975,15 @@ export class PartnersService {
             credentialRotationDays: updatedSettings.credentialRotationDays,
             defaultDisclosureMode: updatedSettings.defaultDisclosureMode,
             allowFullLabelDisclosure: updatedSettings.allowFullLabelDisclosure,
+            enableEncryptedSubmission:
+              updatedSettings.enableEncryptedSubmission,
             rawVerificationRetentionMode:
               updatedSettings.rawVerificationRetentionMode,
             rawVerificationRetentionHours:
               updatedSettings.rawVerificationRetentionHours,
             encryptAuditExports: updatedSettings.encryptAuditExports,
+            enterpriseByokEnabled: updatedSettings.enterpriseByokEnabled,
+            customerKeyStatus: updatedSettings.customerKeyStatus,
           },
         },
         transaction,
@@ -2791,6 +2806,7 @@ export class PartnersService {
             infer: true,
           },
         ),
+        enableEncryptedSubmission: false,
         rawVerificationRetentionMode: this.configService.get(
           'PARTNER_SECURITY_DEFAULT_RAW_VERIFICATION_RETENTION_MODE',
           {
@@ -2809,6 +2825,9 @@ export class PartnersService {
             infer: true,
           },
         ),
+        enterpriseByokEnabled: false,
+        customerKeyArn: null,
+        customerKeyStatus: null,
       },
       select: partnerSecuritySettingsSelect,
     });

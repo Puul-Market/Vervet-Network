@@ -76,6 +76,19 @@ export default async function SecurityPage() {
             value={settings.encryptAuditExports ? "Encrypted" : "Plaintext"}
           />
           <SummaryCard
+            label="Encrypted submission"
+            value={settings.enableEncryptedSubmission ? "Enabled" : "Disabled"}
+          />
+          <SummaryCard
+            hint={settings.customerKeyArn ?? "Platform-managed encryption"}
+            label="Enterprise BYOK"
+            value={
+              settings.enterpriseByokEnabled
+                ? settings.customerKeyStatus ?? "Configured"
+                : "Not enabled"
+            }
+          />
+          <SummaryCard
             label="MFA enforcement"
             value={settings.enforceMfa ? "Enabled" : "Disabled"}
           />
@@ -225,6 +238,27 @@ export default async function SecurityPage() {
               />
               Encrypt generated audit exports at rest
             </label>
+            <label className="event-option">
+              <input
+                defaultChecked={settings.enableEncryptedSubmission}
+                disabled={!canWriteSecurity}
+                name="enableEncryptedSubmission"
+                type="checkbox"
+              />
+              Allow encrypted submission envelopes on resolution APIs
+            </label>
+            <div className="detail-card">
+              <span>Enterprise BYOK</span>
+              <strong>
+                {settings.enterpriseByokEnabled
+                  ? settings.customerKeyStatus ?? "Configured"
+                  : "Not enabled"}
+              </strong>
+              <span>
+                {settings.customerKeyArn ??
+                  "Customer-managed key integration is not configured for this partner."}
+              </span>
+            </div>
             <button className="primary-button" disabled={!canWriteSecurity} type="submit">
               Save Security Settings
             </button>

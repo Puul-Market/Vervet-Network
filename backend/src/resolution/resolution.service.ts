@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -24,6 +25,8 @@ import {
 import type { AuthenticatedPartner } from '../auth/authenticated-partner.interface';
 import { AuditService } from '../audit/audit.service';
 import { buildBlindIndex } from '../common/security/blind-index.util';
+import type { EncryptedFieldDto } from '../common/security/encrypted-field.dto';
+import { openEncryptedField } from '../common/security/encrypted-field.util';
 import { NormalizationService } from '../common/normalization/normalization.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
@@ -108,6 +111,7 @@ interface ResolutionRequestContext {
 interface PartnerPrivacySettings {
   defaultDisclosureMode: StoredDisclosureMode;
   allowFullLabelDisclosure: boolean;
+  enableEncryptedSubmission: boolean;
   rawVerificationRetentionMode: RawVerificationRetentionMode;
   rawVerificationRetentionHours: number;
 }
@@ -208,8 +212,18 @@ export class ResolutionService {
     resolveRecipientDto: ResolveRecipientDto,
     requestContext: ResolutionRequestContext,
   ): Promise<ResolveResponse> {
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const recipientIdentifier = this.readSensitiveInput({
+      plainValue: resolveRecipientDto.recipientIdentifier,
+      encryptedValue: resolveRecipientDto.recipientIdentifierEncrypted,
+      settings: requesterPrivacySettings,
+      fieldLabel: 'Recipient identifier',
+      maxLength: 128,
+    });
     const lookupInput = this.normalizeLookupInput(
-      resolveRecipientDto.recipientIdentifier,
+      recipientIdentifier,
       resolveRecipientDto.chain,
       resolveRecipientDto.asset,
     );
@@ -232,9 +246,6 @@ export class ResolutionService {
       return idempotentResponse;
     }
 
-    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
-      requestContext.authenticatedPartner.partnerId,
-    );
     const retentionExpiresAt = this.buildRetentionExpiresAt(
       requesterPrivacySettings,
     );
@@ -323,7 +334,20 @@ export class ResolutionService {
     confirmRecipientDto: ConfirmRecipientDto,
     requestContext: ResolutionRequestContext,
   ): Promise<ConfirmResponse> {
-    const lookupInput = this.normalizeConfirmInput(confirmRecipientDto);
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const address = this.readSensitiveInput({
+      plainValue: confirmRecipientDto.address,
+      encryptedValue: confirmRecipientDto.addressEncrypted,
+      settings: requesterPrivacySettings,
+      fieldLabel: 'Address',
+      maxLength: 200,
+    });
+    const lookupInput = this.normalizeConfirmInput({
+      ...confirmRecipientDto,
+      address,
+    });
     const requestFingerprint = this.buildRequestFingerprint({
       queryType: QueryType.CONFIRM_ADDRESS,
       platformNormalized: lookupInput.platformNormalized,
@@ -343,9 +367,6 @@ export class ResolutionService {
       return idempotentResponse;
     }
 
-    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
-      requestContext.authenticatedPartner.partnerId,
-    );
     const retentionExpiresAt = this.buildRetentionExpiresAt(
       requesterPrivacySettings,
     );
@@ -437,14 +458,31 @@ export class ResolutionService {
     verifyDestinationDto: VerifyDestinationDto,
     requestContext: ResolutionRequestContext,
   ): Promise<VerifyResponse> {
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
+    const recipientIdentifier = this.readSensitiveInput({
+      plainValue: verifyDestinationDto.recipientIdentifier,
+      encryptedValue: verifyDestinationDto.recipientIdentifierEncrypted,
+      settings: requesterPrivacySettings,
+      fieldLabel: 'Recipient identifier',
+      maxLength: 128,
+    });
+    const address = this.readSensitiveInput({
+      plainValue: verifyDestinationDto.address,
+      encryptedValue: verifyDestinationDto.addressEncrypted,
+      settings: requesterPrivacySettings,
+      fieldLabel: 'Address',
+      maxLength: 200,
+    });
     const lookupInput = this.normalizeLookupInput(
-      verifyDestinationDto.recipientIdentifier,
+      recipientIdentifier,
       verifyDestinationDto.chain,
       verifyDestinationDto.asset,
     );
     const normalizedAddress = this.normalizationService.normalizeAddress(
       lookupInput.chainNormalized,
-      verifyDestinationDto.address,
+      address,
     );
     const requestFingerprint = this.buildRequestFingerprint({
       queryType: QueryType.VERIFY_ADDRESS,
@@ -465,9 +503,6 @@ export class ResolutionService {
       return idempotentResponse;
     }
 
-    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
-      requestContext.authenticatedPartner.partnerId,
-    );
     const retentionExpiresAt = this.buildRetentionExpiresAt(
       requesterPrivacySettings,
     );
@@ -490,7 +525,7 @@ export class ResolutionService {
         platformInput: null,
         chainInput: lookupInput.chainInput,
         assetInput: lookupInput.assetInput,
-        providedAddressRaw: verifyDestinationDto.address.trim(),
+        providedAddressRaw: address,
         providedAddressNormalized: normalizedAddress,
         lookupDecision,
       });
@@ -549,7 +584,7 @@ export class ResolutionService {
         platformInput: null,
         chainInput: lookupInput.chainInput,
         assetInput: lookupInput.assetInput,
-        address: verifyDestinationDto.address,
+        address,
         normalizedAddress,
         idempotencyKey: requestContext.idempotencyKey,
         requestFingerprint,
@@ -611,6 +646,9 @@ export class ResolutionService {
 
     const lookupMode = this.readBatchLookupMode(batchVerifyDto.lookupMode);
     this.assertBatchLookupRequirements(batchVerifyDto, lookupMode);
+    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
+      requestContext.authenticatedPartner.partnerId,
+    );
     const normalizedChain = this.normalizationService.normalizeChain(
       batchVerifyDto.chain,
     );
@@ -633,9 +671,6 @@ export class ResolutionService {
         id: true,
       },
     });
-    const requesterPrivacySettings = await this.getPartnerPrivacySettings(
-      requestContext.authenticatedPartner.partnerId,
-    );
     const retentionExpiresAt = this.buildRetentionExpiresAt(
       requesterPrivacySettings,
     );
@@ -653,25 +688,42 @@ export class ResolutionService {
       let recordedFlags: RiskSignalKind[] = [RiskSignalKind.ADDRESS_MISMATCH];
       let recordedRecommendation = 'invalid_request';
       let requestId = '' as string;
+      let rowAddressInput =
+        row.address?.trim() ||
+        (row.addressEncrypted ? '[encrypted address]' : '');
+      let rowRecipientIdentifierInput =
+        row.recipientIdentifier?.trim() ||
+        (row.recipientIdentifierEncrypted
+          ? '[encrypted recipient identifier]'
+          : null);
 
       try {
         const rowLookupMode = this.resolveBatchRowLookupMode(
           lookupMode,
           row.lookupMode,
         );
+        rowAddressInput = this.readSensitiveInput({
+          plainValue: row.address,
+          encryptedValue: row.addressEncrypted,
+          settings: requesterPrivacySettings,
+          fieldLabel: `Batch row ${index + 1} address`,
+          maxLength: 200,
+        });
 
         if (rowLookupMode === 'BY_RECIPIENT') {
-          if (!row.recipientIdentifier?.trim()) {
-            throw new BadRequestException(
-              'Recipient-based batch rows require a recipient identifier.',
-            );
-          }
+          rowRecipientIdentifierInput = this.readSensitiveInput({
+            plainValue: row.recipientIdentifier,
+            encryptedValue: row.recipientIdentifierEncrypted,
+            settings: requesterPrivacySettings,
+            fieldLabel: `Batch row ${index + 1} recipient identifier`,
+            maxLength: 160,
+          });
 
           const evaluation = await this.evaluateVerifyLookup(
-            row.recipientIdentifier,
+            rowRecipientIdentifierInput,
             batchVerifyDto.chain,
             batchVerifyDto.asset,
-            row.address,
+            rowAddressInput,
           );
           const requestFingerprint = this.buildRequestFingerprint({
             queryType: QueryType.BATCH_VERIFY,
@@ -688,13 +740,13 @@ export class ResolutionService {
             queryType: QueryType.BATCH_VERIFY,
             requesterPartnerId: requestContext.authenticatedPartner.partnerId,
             resolutionBatchRunId: batchRun.id,
-            recipientIdentifier: row.recipientIdentifier.trim(),
+            recipientIdentifier: rowRecipientIdentifierInput,
             recipientIdentifierNormalized:
               evaluation.lookupInput.recipientIdentifierNormalized,
             platformInput: null,
             chainInput: batchVerifyDto.chain.trim(),
             assetInput: batchVerifyDto.asset.trim(),
-            address: row.address.trim(),
+            address: rowAddressInput,
             normalizedAddress: evaluation.normalizedAddress,
             idempotencyKey: null,
             requestFingerprint,
@@ -714,8 +766,8 @@ export class ResolutionService {
               batchRunId: batchRun.id,
               rowIndex: index,
               clientReference: row.clientReference?.trim() || null,
-              recipientIdentifierInput: row.recipientIdentifier.trim(),
-              submittedAddressRaw: row.address.trim(),
+              recipientIdentifierInput: rowRecipientIdentifierInput,
+              submittedAddressRaw: rowAddressInput,
               outcome: evaluation.lookup.outcome,
               riskLevel: evaluation.lookup.riskLevel,
               recommendation: evaluation.lookup.recommendation,
@@ -732,8 +784,8 @@ export class ResolutionService {
             clientReference: row.clientReference?.trim() || null,
             lookupMode: rowLookupMode,
             platform: evaluation.response.platform,
-            recipientIdentifier: row.recipientIdentifier.trim(),
-            submittedAddress: row.address.trim(),
+            recipientIdentifier: rowRecipientIdentifierInput,
+            submittedAddress: rowAddressInput,
             match: evaluation.response.match,
             verified: evaluation.response.verified,
             recipientDisplayName: evaluation.response.recipientDisplayName,
@@ -748,17 +800,19 @@ export class ResolutionService {
           recordedRecommendation = evaluation.lookup.recommendation;
           requestId = request.id;
         } else {
-          if (!row.platform?.trim()) {
+          const rowPlatformInput = row.platform?.trim();
+
+          if (!rowPlatformInput) {
             throw new BadRequestException(
               'Address-based batch rows require a platform.',
             );
           }
 
           const evaluation = await this.evaluateConfirmLookup(
-            row.platform,
+            rowPlatformInput,
             batchVerifyDto.chain,
             batchVerifyDto.asset,
-            row.address,
+            rowAddressInput,
           );
           const requestFingerprint = this.buildRequestFingerprint({
             queryType: QueryType.BATCH_VERIFY,
@@ -775,12 +829,12 @@ export class ResolutionService {
             requesterPartnerId: requestContext.authenticatedPartner.partnerId,
             resolutionBatchRunId: batchRun.id,
             recipientIdentifier:
-              evaluation.response.recipientDisplayName ?? row.platform.trim(),
+              evaluation.response.recipientDisplayName ?? rowPlatformInput,
             recipientIdentifierNormalized: '',
-            platformInput: row.platform.trim(),
+            platformInput: rowPlatformInput,
             chainInput: batchVerifyDto.chain.trim(),
             assetInput: batchVerifyDto.asset.trim(),
-            address: row.address.trim(),
+            address: rowAddressInput,
             normalizedAddress: evaluation.lookupInput.addressNormalized,
             idempotencyKey: null,
             requestFingerprint,
@@ -800,8 +854,8 @@ export class ResolutionService {
               batchRunId: batchRun.id,
               rowIndex: index,
               clientReference: row.clientReference?.trim() || null,
-              recipientIdentifierInput: row.platform.trim(),
-              submittedAddressRaw: row.address.trim(),
+              recipientIdentifierInput: rowPlatformInput,
+              submittedAddressRaw: rowAddressInput,
               outcome: evaluation.lookup.outcome,
               riskLevel: evaluation.lookup.riskLevel,
               recommendation: evaluation.lookup.recommendation,
@@ -819,7 +873,7 @@ export class ResolutionService {
             lookupMode: rowLookupMode,
             platform: evaluation.response.platform,
             recipientIdentifier: null,
-            submittedAddress: row.address.trim(),
+            submittedAddress: rowAddressInput,
             match: evaluation.response.confirmed,
             verified: evaluation.response.verified,
             recipientDisplayName: evaluation.response.recipientDisplayName,
@@ -842,8 +896,8 @@ export class ResolutionService {
             row.lookupMode,
           ),
           platform: row.platform?.trim() ?? null,
-          recipientIdentifier: row.recipientIdentifier?.trim() || null,
-          submittedAddress: row.address.trim(),
+          recipientIdentifier: rowRecipientIdentifierInput,
+          submittedAddress: rowAddressInput,
           match: false,
           verified: false,
           recipientDisplayName: null,
@@ -860,8 +914,8 @@ export class ResolutionService {
             rowIndex: index,
             clientReference: row.clientReference?.trim() || null,
             recipientIdentifierInput:
-              row.recipientIdentifier?.trim() || row.platform?.trim() || '',
-            submittedAddressRaw: row.address.trim(),
+              rowRecipientIdentifierInput || row.platform?.trim() || '',
+            submittedAddressRaw: rowAddressInput,
             outcome: ResolutionOutcome.ERROR,
             riskLevel: RiskLevel.HIGH,
             recommendation:
@@ -900,7 +954,7 @@ export class ResolutionService {
         metadata: {
           batchRunId: batchRun.id,
           rowIndex: index,
-          recipientIdentifier: row.recipientIdentifier.trim(),
+          recipientIdentifier: rowRecipientIdentifierInput,
           outcome: recordedOutcome,
           riskLevel: recordedRiskLevel,
           flags: recordedFlags,
@@ -1170,6 +1224,76 @@ export class ResolutionService {
     return deletedBatchRows.count + deletedRequests.count;
   }
 
+  private readSensitiveInput(params: {
+    plainValue: string | null | undefined;
+    encryptedValue: EncryptedFieldDto | null | undefined;
+    settings: PartnerPrivacySettings;
+    fieldLabel: string;
+    maxLength: number;
+  }): string {
+    const plainValue = params.plainValue?.trim() || null;
+
+    if (plainValue && params.encryptedValue) {
+      throw new BadRequestException(
+        `${params.fieldLabel} must be submitted either as plaintext or encrypted, not both.`,
+      );
+    }
+
+    if (!plainValue && !params.encryptedValue) {
+      throw new BadRequestException(`${params.fieldLabel} is required.`);
+    }
+
+    const value = params.encryptedValue
+      ? this.openEncryptedSensitiveInput(
+          params.encryptedValue,
+          params.settings,
+          params.fieldLabel,
+        )
+      : plainValue;
+
+    if (!value || value.trim().length === 0) {
+      throw new BadRequestException(`${params.fieldLabel} is required.`);
+    }
+
+    const trimmedValue = value.trim();
+
+    if (trimmedValue.length > params.maxLength) {
+      throw new BadRequestException(
+        `${params.fieldLabel} must be at most ${params.maxLength} characters.`,
+      );
+    }
+
+    return trimmedValue;
+  }
+
+  private openEncryptedSensitiveInput(
+    encryptedValue: EncryptedFieldDto,
+    settings: PartnerPrivacySettings,
+    fieldLabel: string,
+  ): string {
+    if (!settings.enableEncryptedSubmission) {
+      throw new ForbiddenException(
+        'Encrypted submission is not enabled for this partner.',
+      );
+    }
+
+    try {
+      return openEncryptedField(
+        encryptedValue,
+        this.configService.get('ENCRYPTED_SUBMISSION_MASTER_SECRET', {
+          infer: true,
+        }),
+      );
+    } catch (error: unknown) {
+      throw new BadRequestException(
+        `${fieldLabel} encrypted payload could not be decrypted.`,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
+
   private normalizeLookupInput(
     recipientIdentifier: string,
     chain: string,
@@ -1194,7 +1318,12 @@ export class ResolutionService {
   }
 
   private normalizeConfirmInput(
-    confirmRecipientDto: ConfirmRecipientDto,
+    confirmRecipientDto: Pick<
+      ConfirmRecipientDto,
+      'platform' | 'chain' | 'asset'
+    > & {
+      address: string;
+    },
   ): NormalizedConfirmInput {
     const platformInput = confirmRecipientDto.platform?.trim() || null;
     const chainInput = confirmRecipientDto.chain.trim();
@@ -2028,6 +2157,7 @@ export class ResolutionService {
         select: {
           defaultDisclosureMode: true,
           allowFullLabelDisclosure: true,
+          enableEncryptedSubmission: true,
           rawVerificationRetentionMode: true,
           rawVerificationRetentionHours: true,
         },
@@ -2041,6 +2171,8 @@ export class ResolutionService {
     );
     const allowFullLabelDisclosure =
       settings?.allowFullLabelDisclosure ?? false;
+    const enableEncryptedSubmission =
+      settings?.enableEncryptedSubmission ?? false;
     const rawVerificationRetentionMode = this.readRawVerificationRetentionMode(
       settings?.rawVerificationRetentionMode,
       this.configService.get(
@@ -2063,6 +2195,7 @@ export class ResolutionService {
     return {
       defaultDisclosureMode,
       allowFullLabelDisclosure,
+      enableEncryptedSubmission,
       rawVerificationRetentionMode,
       rawVerificationRetentionHours,
     };
@@ -2202,11 +2335,16 @@ export class ResolutionService {
 
       if (
         rowLookupMode === 'BY_RECIPIENT' &&
-        !row.recipientIdentifier?.trim()
+        !row.recipientIdentifier?.trim() &&
+        !row.recipientIdentifierEncrypted
       ) {
         throw new BadRequestException(
           'Recipient-based batch rows require a recipient identifier.',
         );
+      }
+
+      if (!row.address?.trim() && !row.addressEncrypted) {
+        throw new BadRequestException('Batch rows require an address.');
       }
 
       if (rowLookupMode === 'BY_ADDRESS' && !row.platform?.trim()) {

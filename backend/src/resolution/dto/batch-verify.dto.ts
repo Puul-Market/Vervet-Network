@@ -11,6 +11,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { EncryptedFieldDto } from '../../common/security/encrypted-field.dto';
 
 export const resolutionBatchLookupModes = [
   'BY_RECIPIENT',
@@ -41,16 +42,27 @@ export class BatchVerifyRowDto {
   @IsOptional()
   @IsString()
   @MaxLength(160)
-  recipientIdentifier!: string;
+  recipientIdentifier?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EncryptedFieldDto)
+  recipientIdentifierEncrypted?: EncryptedFieldDto;
 
   @IsOptional()
   @IsString()
   @MaxLength(120)
   platform?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  address!: string;
+  address?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EncryptedFieldDto)
+  addressEncrypted?: EncryptedFieldDto;
 }
 
 export class BatchVerifyDto {

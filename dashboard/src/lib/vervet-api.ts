@@ -606,9 +606,13 @@ export interface PartnerSecuritySettingsRecord {
   credentialRotationDays: number;
   defaultDisclosureMode: PartnerDefaultDisclosureMode;
   allowFullLabelDisclosure: boolean;
+  enableEncryptedSubmission: boolean;
   rawVerificationRetentionMode: PartnerRawVerificationRetentionMode;
   rawVerificationRetentionHours: number;
   encryptAuditExports: boolean;
+  enterpriseByokEnabled: boolean;
+  customerKeyArn: string | null;
+  customerKeyStatus: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -2036,6 +2040,7 @@ export async function updatePartnerSecuritySettings(
     credentialRotationDays?: number;
     defaultDisclosureMode?: PartnerDefaultDisclosureMode;
     allowFullLabelDisclosure?: boolean;
+    enableEncryptedSubmission?: boolean;
     rawVerificationRetentionMode?: PartnerRawVerificationRetentionMode;
     rawVerificationRetentionHours?: number;
     encryptAuditExports?: boolean;

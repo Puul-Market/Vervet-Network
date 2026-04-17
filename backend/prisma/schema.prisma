@@ -370,9 +370,13 @@ model PartnerSecuritySettings {
   credentialRotationDays     Int      @default(90)
   defaultDisclosureMode      String   @default("VERIFICATION_ONLY")
   allowFullLabelDisclosure   Boolean  @default(false)
+  enableEncryptedSubmission  Boolean  @default(false)
   rawVerificationRetentionMode String @default("SHORT_RETENTION")
   rawVerificationRetentionHours Int   @default(24)
   encryptAuditExports        Boolean  @default(true)
+  enterpriseByokEnabled      Boolean  @default(false)
+  customerKeyArn             String?
+  customerKeyStatus          String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
   partner                    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)

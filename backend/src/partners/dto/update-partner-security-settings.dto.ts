@@ -40,6 +40,10 @@ export class UpdatePartnerSecuritySettingsDto {
   allowFullLabelDisclosure?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  enableEncryptedSubmission?: boolean;
+
+  @IsOptional()
   @IsIn(['NO_RETAIN', 'SHORT_RETENTION', 'STANDARD_RETENTION'])
   rawVerificationRetentionMode?:
     | 'NO_RETAIN'

@@ -47,6 +47,9 @@ export async function POST(request: Request) {
   const encryptAuditExports = readCheckboxField(
     formData.get("encryptAuditExports"),
   );
+  const enableEncryptedSubmission = readCheckboxField(
+    formData.get("enableEncryptedSubmission"),
+  );
 
   if (
     !sessionIdleTimeoutMinutes ||
@@ -85,6 +88,7 @@ export async function POST(request: Request) {
       enforceMfa,
       defaultDisclosureMode,
       allowFullLabelDisclosure,
+      enableEncryptedSubmission,
       rawVerificationRetentionMode,
       rawVerificationRetentionHours:
         rawVerificationRetentionMode === "SHORT_RETENTION"
