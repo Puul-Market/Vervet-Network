@@ -44,8 +44,8 @@ interface AttestationPartnerContext extends PartnerContext {
 const databaseUrl =
   'postgresql://postgres:postgres@localhost:54329/vervet_network?schema=public';
 const adminApiToken = 'phase9-admin-token';
-const webhookSigningMasterSecret = 'phase9-webhook-signing-secret';
-const encryptedSubmissionMasterSecret = 'phase9-encrypted-submission-secret';
+const webhookSigningMasterSecret = 'test-webhook-signing-secret';
+const encryptedSubmissionMasterSecret = webhookSigningMasterSecret;
 
 describe('Request hardening (e2e)', () => {
   let app: INestApplication<App>;
