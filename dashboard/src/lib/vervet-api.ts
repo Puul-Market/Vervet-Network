@@ -1295,10 +1295,15 @@ export class DashboardAdminAuthError extends DashboardApiError {
 }
 
 function getApiBaseUrl(): string {
-  const baseUrl = process.env.VERVET_API_BASE_URL?.trim();
+  const baseUrl =
+    process.env.VERVET_API_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_API_URL?.trim();
 
   if (!baseUrl) {
-    throw new DashboardApiError("VERVET_API_BASE_URL is not configured.", 500);
+    throw new DashboardApiError(
+      "Neither VERVET_API_BASE_URL nor NEXT_PUBLIC_API_URL is configured.",
+      500,
+    );
   }
 
   const normalizedBaseUrl = baseUrl.replace(/\/v1\/?$/u, "");

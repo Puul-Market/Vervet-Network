@@ -17,7 +17,10 @@ export default async function ApiDocsPage() {
     fetchPartnerProfile(session.accessToken),
     fetchPartnerDashboardMetadata(session.accessToken),
   ]);
-  const apiBaseUrl = process.env.VERVET_API_BASE_URL ?? "http://localhost:3000";
+  const apiBaseUrl =
+    process.env.VERVET_API_BASE_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://localhost:3000";
   const relevantEndpoints = [
     partnerProfile.capabilities.apiConsumerEnabled
       ? {
