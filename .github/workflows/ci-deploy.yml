@@ -206,6 +206,8 @@ jobs:
             --include='prisma/***' \
             --include='package.json' \
             --include='package-lock.json' \
+            --include='prisma.config.ts' \
+            --include='tsconfig.json' \
             --exclude='*' \
             backend/ \
             "$EC2_USER@$EC2_HOST:$EC2_DEPLOY_PATH/"
@@ -213,20 +215,20 @@ jobs:
       - name: Install production dependencies and run migrations
         if: env.EC2_HOST != ''
         run: |
-          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'DEPLOY_SCRIPT'
-            cd "$EC2_DEPLOY_PATH"
-            export DATABASE_URL="$PRODUCTION_DATABASE_URL"
-            npm ci --production
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << DEPLOY_SCRIPT
+            cd $EC2_DEPLOY_PATH
+            npm install --omit=dev
+            npx prisma generate
             npx prisma migrate deploy
           DEPLOY_SCRIPT
 
       - name: Restart backend service
         if: env.EC2_HOST != ''
         run: |
-          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << 'RESTART_SCRIPT'
-            cd "$EC2_DEPLOY_PATH"
+          ssh -i ~/.ssh/deploy_key "$EC2_USER@$EC2_HOST" << RESTART_SCRIPT
+            cd $EC2_DEPLOY_PATH
             if command -v pm2 &>/dev/null; then
-              pm2 restart vervet-backend --update-env || pm2 start dist/main.js --name vervet-backend
+              pm2 restart vervet-backend --update-env || pm2 start dist/src/main.js --name vervet-backend
             else
               sudo systemctl restart vervet-backend
             fi
