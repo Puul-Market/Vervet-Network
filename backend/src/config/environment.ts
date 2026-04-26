@@ -10,6 +10,8 @@ export interface EnvironmentVariables {
   PORT: number;
   CORS_ALLOWED_ORIGINS: string[];
   DATABASE_URL: string;
+  DATABASE_POOL_MAX: number;
+  DATABASE_APPLICATION_NAME: string;
   ADMIN_API_TOKEN: string;
   WEBHOOK_SIGNING_MASTER_SECRET: string;
   WEBHOOK_ALLOW_PRIVATE_TARGETS: boolean;
@@ -61,6 +63,15 @@ export function validateEnvironment(
       'CORS_ALLOWED_ORIGINS',
     ),
     DATABASE_URL: parseRequiredString(config.DATABASE_URL, 'DATABASE_URL'),
+    DATABASE_POOL_MAX: parsePositiveInteger(
+      config.DATABASE_POOL_MAX,
+      10,
+      'DATABASE_POOL_MAX',
+    ),
+    DATABASE_APPLICATION_NAME: parseRequiredString(
+      config.DATABASE_APPLICATION_NAME ?? 'vervet-backend',
+      'DATABASE_APPLICATION_NAME',
+    ),
     ADMIN_API_TOKEN: parseRequiredString(
       config.ADMIN_API_TOKEN,
       'ADMIN_API_TOKEN',

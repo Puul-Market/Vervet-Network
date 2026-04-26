@@ -28,6 +28,8 @@ Copy `.env.example` to `.env` and adjust the values for the environment you are 
 `WEBHOOK_SIGNING_MASTER_SECRET` is required for outbound webhook signatures.
 `WEBHOOK_DELIVERY_PROCESSOR_*` controls the automated delivery worker.
 `CORS_ALLOWED_ORIGINS` should be set to the dashboard/browser origins allowed to call the API.
+`DATABASE_POOL_MAX` sets the PostgreSQL pool ceiling for the API process.
+`DATABASE_APPLICATION_NAME` labels backend connections in `pg_stat_activity`.
 `PARTNER_DASHBOARD_SESSION_*` controls dashboard session lifetime and usage writeback.
 
 ### 4. Generate the Prisma client
@@ -51,6 +53,36 @@ npm run start:dev
 
 The API base path is `http://localhost:3000/v1`.
 Interactive API docs are exposed at `http://localhost:3000/docs`, with raw OpenAPI JSON at `http://localhost:3000/docs/json`.
+
+## Production PostgreSQL TLS
+
+For AWS RDS or any managed PostgreSQL service that requires encrypted
+connections, prefer verified TLS instead of `sslmode=no-verify`.
+
+Example with the AWS RDS global bundle:
+
+```bash
+mkdir -p /opt/vervet/certs
+curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+  -o /opt/vervet/certs/rds-global-bundle.pem
+```
+
+Then set `DATABASE_URL` with both `sslmode=verify-full` and
+`sslrootcert=<absolute-path>`:
+
+```bash
+DATABASE_URL="postgresql://<user>:<password>@<host>:5432/<database>?schema=public&sslmode=verify-full&sslrootcert=/opt/vervet/certs/rds-global-bundle.pem"
+```
+
+If the process manager does not automatically reload `.env`, restart the API
+after updating the certificate path or database URL.
+
+Recommended production connection metadata:
+
+```bash
+DATABASE_POOL_MAX=10
+DATABASE_APPLICATION_NAME="vervet-backend"
+```
 
 ## Core Endpoints
 
