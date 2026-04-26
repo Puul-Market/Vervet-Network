@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 const dashboardRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const nextConfig: NextConfig = {
+  outputFileTracingRoot: dashboardRoot,
   turbopack: {
     root: dashboardRoot,
   },
