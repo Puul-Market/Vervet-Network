@@ -16,6 +16,11 @@ import {
   WebhookEventType,
 } from '@prisma/client';
 import { NormalizationService } from '../common/normalization/normalization.service';
+import {
+  EncryptedSubmissionService,
+  type PartnerEncryptedSubmissionPolicy,
+} from '../common/security/encrypted-submission.service';
+import type { EncryptedFieldDto } from '../common/security/encrypted-field.dto';
 import { AuditService } from '../audit/audit.service';
 import { buildBlindIndex } from '../common/security/blind-index.util';
 import { sealString } from '../common/security/sealed-data.util';
@@ -53,6 +58,14 @@ interface AttestationTiming {
   issuedAt: Date;
 }
 
+type ResolvedCreateAttestationDto = Omit<
+  CreateAttestationDto,
+  'recipientIdentifier' | 'address'
+> & {
+  recipientIdentifier: string;
+  address: string;
+};
+
 @Injectable()
 export class AttestationsService {
   constructor(
@@ -60,6 +73,7 @@ export class AttestationsService {
     private readonly partnersService: PartnersService,
     private readonly recipientsService: RecipientsService,
     private readonly normalizationService: NormalizationService,
+    private readonly encryptedSubmissionService: EncryptedSubmissionService,
     private readonly requestHardeningService: RequestHardeningService,
     private readonly webhooksService: WebhooksService,
     private readonly auditService: AuditService,
@@ -75,9 +89,28 @@ export class AttestationsService {
     },
   ) {
     let normalizedFields: NormalizedAttestationFields | null = null;
+    let materializedSensitiveFields: Pick<
+      ResolvedCreateAttestationDto,
+      'recipientIdentifier' | 'address'
+    > | null = null;
 
     try {
-      normalizedFields = this.normalizeAttestationFields(createAttestationDto);
+      const loadEncryptedSubmissionPolicy =
+        this.createEncryptedSubmissionPolicyLoader(
+          authenticatedPartner.partnerId,
+        );
+      const resolvedCreateAttestationDto =
+        await this.resolveSensitiveAttestationFields(
+          createAttestationDto,
+          loadEncryptedSubmissionPolicy,
+        );
+      materializedSensitiveFields = {
+        recipientIdentifier: resolvedCreateAttestationDto.recipientIdentifier,
+        address: resolvedCreateAttestationDto.address,
+      };
+      normalizedFields = this.normalizeAttestationFields(
+        resolvedCreateAttestationDto,
+      );
       const normalizedAttestationFields = normalizedFields;
 
       if (
@@ -101,10 +134,10 @@ export class AttestationsService {
       }
 
       const signatureIsValid = verifyAttestationSignature(
-        createAttestationDto.algorithm,
+        resolvedCreateAttestationDto.algorithm,
         signingKey.publicKeyPem,
         normalizedAttestationFields.canonicalPayload,
-        createAttestationDto.signature,
+        resolvedCreateAttestationDto.signature,
       );
 
       if (!signatureIsValid) {
@@ -147,21 +180,22 @@ export class AttestationsService {
         };
       }
 
-      const timing = this.parseAttestationTiming(createAttestationDto);
+      const timing = this.parseAttestationTiming(resolvedCreateAttestationDto);
 
       const result = await this.prismaService.$transaction(
         async (transaction) => {
           const corridor = await this.resolveAttestationCorridor(
             transaction,
-            createAttestationDto,
+            resolvedCreateAttestationDto,
             normalizedAttestationFields,
           );
 
           const recipient = await this.recipientsService.upsertRecipient(
             {
               partnerId: authenticatedPartner.partnerId,
-              externalRecipientId: createAttestationDto.recipientExternalId,
-              displayName: createAttestationDto.recipientDisplayName,
+              externalRecipientId:
+                resolvedCreateAttestationDto.recipientExternalId,
+              displayName: resolvedCreateAttestationDto.recipientDisplayName,
             },
             transaction,
           );
@@ -169,15 +203,15 @@ export class AttestationsService {
             {
               partnerId: authenticatedPartner.partnerId,
               recipientId: recipient.id,
-              kind: createAttestationDto.identifierKind,
-              value: createAttestationDto.recipientIdentifier,
+              kind: resolvedCreateAttestationDto.identifierKind,
+              value: resolvedCreateAttestationDto.recipientIdentifier,
             },
             transaction,
           );
 
           const destination = await this.applyDestinationAttestation(
             transaction,
-            createAttestationDto,
+            resolvedCreateAttestationDto,
             corridor.assetNetwork.id,
             recipient.id,
             normalizedAttestationFields,
@@ -188,14 +222,14 @@ export class AttestationsService {
             data: {
               partnerId: authenticatedPartner.partnerId,
               signingKeyId: signingKey.id,
-              attestationType: createAttestationDto.attestationType,
+              attestationType: resolvedCreateAttestationDto.attestationType,
               recipientId: recipient.id,
               identifierId: identifier.id,
               assetNetworkId: corridor.assetNetwork.id,
               destinationId: destination.id,
               recipientIdentifierSnapshot: identifier.normalizedValue,
               displayNameSnapshot: recipient.displayName,
-              addressRaw: createAttestationDto.address.trim(),
+              addressRaw: resolvedCreateAttestationDto.address,
               addressNormalized: normalizedAttestationFields.address,
               memoValue: normalizedAttestationFields.memo,
               canonicalPayload: normalizedAttestationFields.canonicalPayload,
@@ -203,8 +237,10 @@ export class AttestationsService {
                 normalizedAttestationFields.canonicalPayload,
               ) as Prisma.InputJsonValue,
               payloadHash: normalizedAttestationFields.payloadHash,
-              signature: createAttestationDto.signature.trim(),
-              sequenceNumber: BigInt(createAttestationDto.sequenceNumber),
+              signature: resolvedCreateAttestationDto.signature.trim(),
+              sequenceNumber: BigInt(
+                resolvedCreateAttestationDto.sequenceNumber,
+              ),
               issuedAt: timing.issuedAt,
               effectiveFrom: timing.effectiveFrom,
               expiresAt: timing.expiresAt,
@@ -222,21 +258,21 @@ export class AttestationsService {
               action: 'attestation.ingested',
               entityType: 'Attestation',
               entityId: attestation.id,
-              summary: `Ingested ${createAttestationDto.attestationType.toLowerCase()} attestation for '${identifier.normalizedValue}'.`,
+              summary: `Ingested ${resolvedCreateAttestationDto.attestationType.toLowerCase()} attestation for '${identifier.normalizedValue}'.`,
               metadata: {
-                attestationType: createAttestationDto.attestationType,
+                attestationType: resolvedCreateAttestationDto.attestationType,
                 recipientIdentifier: identifier.normalizedValue,
                 chain: corridor.chain.slug,
                 asset: corridor.asset.symbol,
                 destinationId: destination.id,
-                sequenceNumber: createAttestationDto.sequenceNumber,
+                sequenceNumber: resolvedCreateAttestationDto.sequenceNumber,
               },
             },
             transaction,
           );
 
           const webhookEventType =
-            createAttestationDto.attestationType ===
+            resolvedCreateAttestationDto.attestationType ===
             AttestationType.DESTINATION_REVOCATION
               ? WebhookEventType.DESTINATION_REVOKED
               : WebhookEventType.DESTINATION_UPDATED;
@@ -249,7 +285,7 @@ export class AttestationsService {
                 webhookEventType,
                 authenticatedPartner.partnerSlug,
                 attestation.id,
-                createAttestationDto.attestationType,
+                resolvedCreateAttestationDto.attestationType,
                 identifier.normalizedValue,
                 recipient.displayName,
                 corridor.chain.slug,
@@ -270,7 +306,7 @@ export class AttestationsService {
             partnerId: authenticatedPartner.partnerId,
             recipientIdentifier: identifier.normalizedValue,
             recipientDisplayName: recipient.displayName,
-            attestationType: createAttestationDto.attestationType,
+            attestationType: resolvedCreateAttestationDto.attestationType,
             chain: corridor.chain.slug,
             asset: corridor.asset.symbol,
             address: destination.addressRaw,
@@ -303,13 +339,14 @@ export class AttestationsService {
         authenticatedPartner,
         error,
         normalizedFields,
+        materializedSensitiveFields,
       );
       throw error;
     }
   }
 
   private normalizeAttestationFields(
-    createAttestationDto: CreateAttestationDto,
+    createAttestationDto: ResolvedCreateAttestationDto,
   ): NormalizedAttestationFields {
     const partnerSlug = this.normalizationService.normalizePartnerSlug(
       createAttestationDto.partnerSlug,
@@ -452,7 +489,7 @@ export class AttestationsService {
 
   private async applyDestinationAttestation(
     transaction: Prisma.TransactionClient,
-    createAttestationDto: CreateAttestationDto,
+    createAttestationDto: ResolvedCreateAttestationDto,
     assetNetworkId: string,
     recipientId: string,
     normalizedFields: NormalizedAttestationFields,
@@ -518,9 +555,9 @@ export class AttestationsService {
         },
       },
       update: {
-        addressRaw: createAttestationDto.address.trim(),
+        addressRaw: createAttestationDto.address,
         addressRawCiphertext: this.sealOptionalString(
-          createAttestationDto.address.trim(),
+          createAttestationDto.address,
         ),
         addressNormalizedBlindIndex: this.buildAddressBlindIndex(
           normalizedFields.address,
@@ -535,9 +572,9 @@ export class AttestationsService {
       create: {
         recipientId,
         assetNetworkId,
-        addressRaw: createAttestationDto.address.trim(),
+        addressRaw: createAttestationDto.address,
         addressRawCiphertext: this.sealOptionalString(
-          createAttestationDto.address.trim(),
+          createAttestationDto.address,
         ),
         addressNormalized: normalizedFields.address,
         addressNormalizedBlindIndex: this.buildAddressBlindIndex(
@@ -817,12 +854,22 @@ export class AttestationsService {
     authenticatedPartner: AuthenticatedPartner,
     error: unknown,
     normalizedFields: NormalizedAttestationFields | null,
+    materializedSensitiveFields: Pick<
+      ResolvedCreateAttestationDto,
+      'recipientIdentifier' | 'address'
+    > | null,
   ) {
     try {
       const auditContext = this.buildAuditActorContext(authenticatedPartner);
       const recipientIdentifier =
         normalizedFields?.recipientIdentifier ??
-        createAttestationDto.recipientIdentifier.trim();
+        materializedSensitiveFields?.recipientIdentifier ??
+        this.describeSubmittedSensitiveValue({
+          plainValue: createAttestationDto.recipientIdentifier,
+          encryptedValue: createAttestationDto.recipientIdentifierEncrypted,
+          encryptedLabel: '[encrypted recipient identifier]',
+          missingLabel: '[missing recipient identifier]',
+        });
 
       await this.auditService.recordEvent({
         actorType: auditContext.actorType,
@@ -884,5 +931,108 @@ export class AttestationsService {
     }
 
     return 'Unknown attestation ingestion error.';
+  }
+
+  private async resolveSensitiveAttestationFields(
+    createAttestationDto: CreateAttestationDto,
+    loadEncryptedSubmissionPolicy: () => Promise<PartnerEncryptedSubmissionPolicy>,
+  ): Promise<ResolvedCreateAttestationDto> {
+    const recipientIdentifier = await this.readSensitiveInput({
+      plainValue: createAttestationDto.recipientIdentifier,
+      encryptedValue: createAttestationDto.recipientIdentifierEncrypted,
+      loadEncryptedSubmissionPolicy,
+      fieldLabel: 'Recipient identifier',
+      maxLength: 128,
+    });
+    const address = await this.readSensitiveInput({
+      plainValue: createAttestationDto.address,
+      encryptedValue: createAttestationDto.addressEncrypted,
+      loadEncryptedSubmissionPolicy,
+      fieldLabel: 'Address',
+    });
+
+    return {
+      ...createAttestationDto,
+      recipientIdentifier,
+      address,
+    };
+  }
+
+  private async readSensitiveInput(params: {
+    plainValue: string | null | undefined;
+    encryptedValue: EncryptedFieldDto | null | undefined;
+    loadEncryptedSubmissionPolicy: () => Promise<PartnerEncryptedSubmissionPolicy>;
+    fieldLabel: string;
+    maxLength?: number;
+  }): Promise<string> {
+    const plainValue = params.plainValue?.trim() || null;
+
+    if (plainValue && params.encryptedValue) {
+      throw new BadRequestException(
+        `${params.fieldLabel} must be submitted either as plaintext or encrypted, not both.`,
+      );
+    }
+
+    if (!plainValue && !params.encryptedValue) {
+      throw new BadRequestException(`${params.fieldLabel} is required.`);
+    }
+
+    const value = params.encryptedValue
+      ? this.encryptedSubmissionService.openField(
+          params.encryptedValue,
+          await params.loadEncryptedSubmissionPolicy(),
+          params.fieldLabel,
+        )
+      : plainValue;
+
+    if (!value || value.trim().length === 0) {
+      throw new BadRequestException(`${params.fieldLabel} is required.`);
+    }
+
+    const trimmedValue = value.trim();
+
+    if (
+      params.maxLength !== undefined &&
+      trimmedValue.length > params.maxLength
+    ) {
+      throw new BadRequestException(
+        `${params.fieldLabel} must be at most ${params.maxLength} characters.`,
+      );
+    }
+
+    return trimmedValue;
+  }
+
+  private createEncryptedSubmissionPolicyLoader(partnerId: string) {
+    let encryptedSubmissionPolicyPromise: Promise<PartnerEncryptedSubmissionPolicy> | null =
+      null;
+
+    return () => {
+      if (!encryptedSubmissionPolicyPromise) {
+        encryptedSubmissionPolicyPromise =
+          this.encryptedSubmissionService.getPartnerPolicy(partnerId);
+      }
+
+      return encryptedSubmissionPolicyPromise;
+    };
+  }
+
+  private describeSubmittedSensitiveValue(params: {
+    plainValue: string | null | undefined;
+    encryptedValue: EncryptedFieldDto | null | undefined;
+    encryptedLabel: string;
+    missingLabel: string;
+  }): string {
+    const plainValue = params.plainValue?.trim();
+
+    if (plainValue) {
+      return plainValue;
+    }
+
+    if (params.encryptedValue) {
+      return params.encryptedLabel;
+    }
+
+    return params.missingLabel;
   }
 }

@@ -25,10 +25,9 @@ export const dynamic = "force-dynamic";
 export default async function SecurityPage() {
   const session = await requireDashboardSession();
   const flash = await consumeDashboardFlash();
-  const canWriteSecurity = canAccessScope(
-    session.scopes as CredentialScope[],
-    ["security:write"],
-  );
+  const canWriteSecurity = canAccessScope(session.scopes as CredentialScope[], [
+    "security:write",
+  ]);
 
   try {
     const [settings, recentActivity, partnerProfile] = await Promise.all([
@@ -84,7 +83,7 @@ export default async function SecurityPage() {
             label="Enterprise BYOK"
             value={
               settings.enterpriseByokEnabled
-                ? settings.customerKeyStatus ?? "Configured"
+                ? (settings.customerKeyStatus ?? "Configured")
                 : "Not enabled"
             }
           />
@@ -143,7 +142,11 @@ export default async function SecurityPage() {
             </div>
           </div>
 
-          <form action="/access/actions/update-security" className="console-form" method="POST">
+          <form
+            action="/access/actions/update-security"
+            className="console-form"
+            method="POST"
+          >
             <div className="console-grid">
               <label className="field">
                 <span>Session idle timeout (minutes)</span>
@@ -181,9 +184,7 @@ export default async function SecurityPage() {
                 >
                   <option value="NO_RETAIN">No retain</option>
                   <option value="SHORT_RETENTION">Short retention</option>
-                  <option value="STANDARD_RETENTION">
-                    Standard retention
-                  </option>
+                  <option value="STANDARD_RETENTION">Standard retention</option>
                 </select>
               </label>
             </div>
@@ -245,13 +246,14 @@ export default async function SecurityPage() {
                 name="enableEncryptedSubmission"
                 type="checkbox"
               />
-              Allow encrypted submission envelopes on resolution APIs
+              Allow encrypted submission envelopes on resolution and attestation
+              APIs
             </label>
             <div className="detail-card">
               <span>Enterprise BYOK</span>
               <strong>
                 {settings.enterpriseByokEnabled
-                  ? settings.customerKeyStatus ?? "Configured"
+                  ? (settings.customerKeyStatus ?? "Configured")
                   : "Not enabled"}
               </strong>
               <span>
@@ -259,7 +261,11 @@ export default async function SecurityPage() {
                   "Customer-managed key integration is not configured for this partner."}
               </span>
             </div>
-            <button className="primary-button" disabled={!canWriteSecurity} type="submit">
+            <button
+              className="primary-button"
+              disabled={!canWriteSecurity}
+              type="submit"
+            >
               Save Security Settings
             </button>
           </form>

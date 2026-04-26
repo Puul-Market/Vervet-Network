@@ -301,6 +301,154 @@ describe('Request hardening (e2e)', () => {
       .expect(403);
   });
 
+  it('accepts encrypted attestation recipient and address fields when encrypted submission is enabled', async () => {
+    const partner = await createAttestationPartnerContext([
+      'attestations:write',
+      'resolution:read',
+    ]);
+    const recipientIdentifier = `ingest-encrypted@${partner.slug}`;
+    const address = randomEvmAddress();
+    const attestationPayload = createSignedAttestationPayload({
+      partner,
+      sequenceNumber: 1,
+      recipientExternalId: `recipient-${partner.slug}`,
+      recipientDisplayName: 'Encrypted Ingest User',
+      recipientIdentifier,
+      address,
+      issuedAt: new Date().toISOString(),
+      effectiveFrom: new Date().toISOString(),
+    });
+
+    await upsertPartnerSecuritySettings(partner.id, {
+      enableEncryptedSubmission: true,
+    });
+
+    const attestationResponse = await request(app.getHttpServer())
+      .post('/v1/attestations')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .set('X-Request-Nonce', `nonce-${createUniqueSuffix()}`)
+      .set('X-Request-Timestamp', new Date().toISOString())
+      .send(
+        toEncryptedAttestationPayload(
+          attestationPayload,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+      )
+      .expect(201);
+
+    expect(attestationResponse.body.data).toMatchObject({
+      recipientIdentifier,
+      address,
+      chain: 'ethereum',
+      asset: 'USDC',
+    });
+
+    const resolutionResponse = await request(app.getHttpServer())
+      .post('/v1/resolution/resolve')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .send({
+        recipientIdentifier,
+        chain: 'ethereum',
+        asset: 'USDC',
+      })
+      .expect(201);
+
+    expect(resolutionResponse.body.data).toMatchObject({
+      verified: true,
+      address,
+      chain: 'ethereum',
+      asset: 'USDC',
+    });
+  });
+
+  it('accepts encrypted attestation recipient and address fields for BYOK-configured partners on the current bridge path', async () => {
+    const partner = await createAttestationPartnerContext([
+      'attestations:write',
+      'resolution:read',
+    ]);
+    const recipientIdentifier = `ingest-byok@${partner.slug}`;
+    const address = randomEvmAddress();
+    const attestationPayload = createSignedAttestationPayload({
+      partner,
+      sequenceNumber: 1,
+      recipientExternalId: `recipient-${partner.slug}`,
+      recipientDisplayName: 'BYOK Ingest User',
+      recipientIdentifier,
+      address,
+      issuedAt: new Date().toISOString(),
+      effectiveFrom: new Date().toISOString(),
+    });
+
+    await upsertPartnerSecuritySettings(partner.id, {
+      enableEncryptedSubmission: true,
+      enterpriseByokEnabled: true,
+      customerKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/example',
+      customerKeyStatus: 'ACTIVE',
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/attestations')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .set('X-Request-Nonce', `nonce-${createUniqueSuffix()}`)
+      .set('X-Request-Timestamp', new Date().toISOString())
+      .send(
+        toEncryptedAttestationPayload(
+          attestationPayload,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+      )
+      .expect(201);
+
+    const resolutionResponse = await request(app.getHttpServer())
+      .post('/v1/resolution/resolve')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .send({
+        recipientIdentifier,
+        chain: 'ethereum',
+        asset: 'USDC',
+      })
+      .expect(201);
+
+    expect(resolutionResponse.body.data).toMatchObject({
+      verified: true,
+      address,
+      chain: 'ethereum',
+      asset: 'USDC',
+    });
+  });
+
+  it('rejects encrypted attestation recipient and address fields when encrypted submission is disabled', async () => {
+    const partner = await createAttestationPartnerContext([
+      'attestations:write',
+    ]);
+    const attestationPayload = createSignedAttestationPayload({
+      partner,
+      sequenceNumber: 1,
+      recipientExternalId: `recipient-${partner.slug}`,
+      recipientDisplayName: 'Disabled Ingest User',
+      recipientIdentifier: `ingest-disabled@${partner.slug}`,
+      address: randomEvmAddress(),
+      issuedAt: new Date().toISOString(),
+      effectiveFrom: new Date().toISOString(),
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/attestations')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .set('X-Request-Nonce', `nonce-${createUniqueSuffix()}`)
+      .set('X-Request-Timestamp', new Date().toISOString())
+      .send(
+        toEncryptedAttestationPayload(
+          attestationPayload,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+      )
+      .expect(403);
+  });
+
   it('rejects replayed attestation requests that reuse a nonce', async () => {
     const partner = await createAttestationPartnerContext([
       'attestations:write',
@@ -613,6 +761,24 @@ function createSignedAttestationPayload(params: {
   return {
     ...payload,
     signature,
+  };
+}
+
+function toEncryptedAttestationPayload(
+  attestationPayload: ReturnType<typeof createSignedAttestationPayload>,
+  masterSecret: string,
+  keyId: string,
+) {
+  const { recipientIdentifier, address, ...rest } = attestationPayload;
+
+  return {
+    ...rest,
+    recipientIdentifierEncrypted: sealEncryptedField(
+      recipientIdentifier,
+      masterSecret,
+      keyId,
+    ),
+    addressEncrypted: sealEncryptedField(address, masterSecret, keyId),
   };
 }
 

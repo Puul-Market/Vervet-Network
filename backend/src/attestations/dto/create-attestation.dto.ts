@@ -4,6 +4,7 @@ import {
   SigningKeyAlgorithm,
   TokenStandard,
 } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -12,7 +13,9 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { EncryptedFieldDto } from '../../common/security/encrypted-field.dto';
 
 export class CreateAttestationDto {
   @IsString()
@@ -42,9 +45,15 @@ export class CreateAttestationDto {
   @MaxLength(120)
   recipientDisplayName?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(128)
-  recipientIdentifier!: string;
+  recipientIdentifier?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EncryptedFieldDto)
+  recipientIdentifierEncrypted?: EncryptedFieldDto;
 
   @IsEnum(IdentifierKind)
   identifierKind!: IdentifierKind;
@@ -73,8 +82,14 @@ export class CreateAttestationDto {
   @Min(0)
   decimals?: number;
 
+  @IsOptional()
   @IsString()
-  address!: string;
+  address?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => EncryptedFieldDto)
+  addressEncrypted?: EncryptedFieldDto;
 
   @IsOptional()
   @IsString()
