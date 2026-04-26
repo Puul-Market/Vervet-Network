@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import {
   ConflictException,
   BadRequestException,
-  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -26,7 +25,10 @@ import type { AuthenticatedPartner } from '../auth/authenticated-partner.interfa
 import { AuditService } from '../audit/audit.service';
 import { buildBlindIndex } from '../common/security/blind-index.util';
 import type { EncryptedFieldDto } from '../common/security/encrypted-field.dto';
-import { openEncryptedField } from '../common/security/encrypted-field.util';
+import {
+  EncryptedSubmissionService,
+  type PartnerEncryptedSubmissionPolicy,
+} from '../common/security/encrypted-submission.service';
 import { NormalizationService } from '../common/normalization/normalization.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../prisma/prisma.service';
@@ -111,7 +113,6 @@ interface ResolutionRequestContext {
 interface PartnerPrivacySettings {
   defaultDisclosureMode: StoredDisclosureMode;
   allowFullLabelDisclosure: boolean;
-  enableEncryptedSubmission: boolean;
   rawVerificationRetentionMode: RawVerificationRetentionMode;
   rawVerificationRetentionHours: number;
 }
@@ -205,6 +206,7 @@ export class ResolutionService {
     private readonly normalizationService: NormalizationService,
     private readonly auditService: AuditService,
     private readonly requestHardeningService: RequestHardeningService,
+    private readonly encryptedSubmissionService: EncryptedSubmissionService,
     private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
@@ -212,13 +214,17 @@ export class ResolutionService {
     resolveRecipientDto: ResolveRecipientDto,
     requestContext: ResolutionRequestContext,
   ): Promise<ResolveResponse> {
+    const loadEncryptedSubmissionPolicy =
+      this.createEncryptedSubmissionPolicyLoader(
+        requestContext.authenticatedPartner.partnerId,
+      );
     const requesterPrivacySettings = await this.getPartnerPrivacySettings(
       requestContext.authenticatedPartner.partnerId,
     );
-    const recipientIdentifier = this.readSensitiveInput({
+    const recipientIdentifier = await this.readSensitiveInput({
       plainValue: resolveRecipientDto.recipientIdentifier,
       encryptedValue: resolveRecipientDto.recipientIdentifierEncrypted,
-      settings: requesterPrivacySettings,
+      loadEncryptedSubmissionPolicy,
       fieldLabel: 'Recipient identifier',
       maxLength: 128,
     });
@@ -334,13 +340,17 @@ export class ResolutionService {
     confirmRecipientDto: ConfirmRecipientDto,
     requestContext: ResolutionRequestContext,
   ): Promise<ConfirmResponse> {
+    const loadEncryptedSubmissionPolicy =
+      this.createEncryptedSubmissionPolicyLoader(
+        requestContext.authenticatedPartner.partnerId,
+      );
     const requesterPrivacySettings = await this.getPartnerPrivacySettings(
       requestContext.authenticatedPartner.partnerId,
     );
-    const address = this.readSensitiveInput({
+    const address = await this.readSensitiveInput({
       plainValue: confirmRecipientDto.address,
       encryptedValue: confirmRecipientDto.addressEncrypted,
-      settings: requesterPrivacySettings,
+      loadEncryptedSubmissionPolicy,
       fieldLabel: 'Address',
       maxLength: 200,
     });
@@ -458,20 +468,24 @@ export class ResolutionService {
     verifyDestinationDto: VerifyDestinationDto,
     requestContext: ResolutionRequestContext,
   ): Promise<VerifyResponse> {
+    const loadEncryptedSubmissionPolicy =
+      this.createEncryptedSubmissionPolicyLoader(
+        requestContext.authenticatedPartner.partnerId,
+      );
     const requesterPrivacySettings = await this.getPartnerPrivacySettings(
       requestContext.authenticatedPartner.partnerId,
     );
-    const recipientIdentifier = this.readSensitiveInput({
+    const recipientIdentifier = await this.readSensitiveInput({
       plainValue: verifyDestinationDto.recipientIdentifier,
       encryptedValue: verifyDestinationDto.recipientIdentifierEncrypted,
-      settings: requesterPrivacySettings,
+      loadEncryptedSubmissionPolicy,
       fieldLabel: 'Recipient identifier',
       maxLength: 128,
     });
-    const address = this.readSensitiveInput({
+    const address = await this.readSensitiveInput({
       plainValue: verifyDestinationDto.address,
       encryptedValue: verifyDestinationDto.addressEncrypted,
-      settings: requesterPrivacySettings,
+      loadEncryptedSubmissionPolicy,
       fieldLabel: 'Address',
       maxLength: 200,
     });
@@ -625,6 +639,10 @@ export class ResolutionService {
     batchVerifyDto: BatchVerifyDto,
     requestContext: ResolutionRequestContext,
   ): Promise<BatchVerifyResponse> {
+    const loadEncryptedSubmissionPolicy =
+      this.createEncryptedSubmissionPolicyLoader(
+        requestContext.authenticatedPartner.partnerId,
+      );
     const configuredMaxRows = this.configService.get(
       'RESOLUTION_BATCH_MAX_ROWS',
       {
@@ -702,19 +720,19 @@ export class ResolutionService {
           lookupMode,
           row.lookupMode,
         );
-        rowAddressInput = this.readSensitiveInput({
+        rowAddressInput = await this.readSensitiveInput({
           plainValue: row.address,
           encryptedValue: row.addressEncrypted,
-          settings: requesterPrivacySettings,
+          loadEncryptedSubmissionPolicy,
           fieldLabel: `Batch row ${index + 1} address`,
           maxLength: 200,
         });
 
         if (rowLookupMode === 'BY_RECIPIENT') {
-          rowRecipientIdentifierInput = this.readSensitiveInput({
+          rowRecipientIdentifierInput = await this.readSensitiveInput({
             plainValue: row.recipientIdentifier,
             encryptedValue: row.recipientIdentifierEncrypted,
-            settings: requesterPrivacySettings,
+            loadEncryptedSubmissionPolicy,
             fieldLabel: `Batch row ${index + 1} recipient identifier`,
             maxLength: 160,
           });
@@ -1224,13 +1242,13 @@ export class ResolutionService {
     return deletedBatchRows.count + deletedRequests.count;
   }
 
-  private readSensitiveInput(params: {
+  private async readSensitiveInput(params: {
     plainValue: string | null | undefined;
     encryptedValue: EncryptedFieldDto | null | undefined;
-    settings: PartnerPrivacySettings;
+    loadEncryptedSubmissionPolicy: () => Promise<PartnerEncryptedSubmissionPolicy>;
     fieldLabel: string;
     maxLength: number;
-  }): string {
+  }): Promise<string> {
     const plainValue = params.plainValue?.trim() || null;
 
     if (plainValue && params.encryptedValue) {
@@ -1246,7 +1264,7 @@ export class ResolutionService {
     const value = params.encryptedValue
       ? this.openEncryptedSensitiveInput(
           params.encryptedValue,
-          params.settings,
+          await params.loadEncryptedSubmissionPolicy(),
           params.fieldLabel,
         )
       : plainValue;
@@ -1268,30 +1286,14 @@ export class ResolutionService {
 
   private openEncryptedSensitiveInput(
     encryptedValue: EncryptedFieldDto,
-    settings: PartnerPrivacySettings,
+    encryptedSubmissionPolicy: PartnerEncryptedSubmissionPolicy,
     fieldLabel: string,
   ): string {
-    if (!settings.enableEncryptedSubmission) {
-      throw new ForbiddenException(
-        'Encrypted submission is not enabled for this partner.',
-      );
-    }
-
-    try {
-      return openEncryptedField(
-        encryptedValue,
-        this.configService.get('ENCRYPTED_SUBMISSION_MASTER_SECRET', {
-          infer: true,
-        }),
-      );
-    } catch (error: unknown) {
-      throw new BadRequestException(
-        `${fieldLabel} encrypted payload could not be decrypted.`,
-        {
-          cause: error,
-        },
-      );
-    }
+    return this.encryptedSubmissionService.openField(
+      encryptedValue,
+      encryptedSubmissionPolicy,
+      fieldLabel,
+    );
   }
 
   private normalizeLookupInput(
@@ -2157,7 +2159,6 @@ export class ResolutionService {
         select: {
           defaultDisclosureMode: true,
           allowFullLabelDisclosure: true,
-          enableEncryptedSubmission: true,
           rawVerificationRetentionMode: true,
           rawVerificationRetentionHours: true,
         },
@@ -2171,8 +2172,6 @@ export class ResolutionService {
     );
     const allowFullLabelDisclosure =
       settings?.allowFullLabelDisclosure ?? false;
-    const enableEncryptedSubmission =
-      settings?.enableEncryptedSubmission ?? false;
     const rawVerificationRetentionMode = this.readRawVerificationRetentionMode(
       settings?.rawVerificationRetentionMode,
       this.configService.get(
@@ -2195,9 +2194,22 @@ export class ResolutionService {
     return {
       defaultDisclosureMode,
       allowFullLabelDisclosure,
-      enableEncryptedSubmission,
       rawVerificationRetentionMode,
       rawVerificationRetentionHours,
+    };
+  }
+
+  private createEncryptedSubmissionPolicyLoader(partnerId: string) {
+    let encryptedSubmissionPolicyPromise: Promise<PartnerEncryptedSubmissionPolicy> | null =
+      null;
+
+    return () => {
+      if (!encryptedSubmissionPolicyPromise) {
+        encryptedSubmissionPolicyPromise =
+          this.encryptedSubmissionService.getPartnerPolicy(partnerId);
+      }
+
+      return encryptedSubmissionPolicyPromise;
     };
   }
 

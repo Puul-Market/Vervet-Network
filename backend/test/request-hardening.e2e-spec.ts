@@ -14,6 +14,7 @@ import {
   TokenStandard,
 } from '@prisma/client';
 import {
+  createCipheriv,
   createHash,
   generateKeyPairSync,
   randomBytes,
@@ -44,6 +45,7 @@ const databaseUrl =
   'postgresql://postgres:postgres@localhost:54329/vervet_network?schema=public';
 const adminApiToken = 'phase9-admin-token';
 const webhookSigningMasterSecret = 'phase9-webhook-signing-secret';
+const encryptedSubmissionMasterSecret = 'phase9-encrypted-submission-secret';
 
 describe('Request hardening (e2e)', () => {
   let app: INestApplication<App>;
@@ -53,6 +55,8 @@ describe('Request hardening (e2e)', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.ADMIN_API_TOKEN = adminApiToken;
     process.env.WEBHOOK_SIGNING_MASTER_SECRET = webhookSigningMasterSecret;
+    process.env.ENCRYPTED_SUBMISSION_MASTER_SECRET =
+      encryptedSubmissionMasterSecret;
     process.env.WEBHOOK_DELIVERY_PROCESSOR_ENABLED = 'false';
     process.env.ATTESTATION_REQUEST_MAX_AGE_MS = '300000';
     process.env.ATTESTATION_REQUEST_NONCE_TTL_MS = '600000';
@@ -170,6 +174,131 @@ describe('Request hardening (e2e)', () => {
         asset: 'USDC',
       })
       .expect(409);
+  });
+
+  it('accepts encrypted recipient identifiers when encrypted submission is enabled', async () => {
+    const partner = await createAttestationPartnerContext([
+      'attestations:write',
+      'resolution:read',
+    ]);
+    const recipientIdentifier = `encrypted@${partner.slug}`;
+    const address = randomEvmAddress();
+    const attestationPayload = createSignedAttestationPayload({
+      partner,
+      sequenceNumber: 1,
+      recipientExternalId: `recipient-${partner.slug}`,
+      recipientDisplayName: 'Encrypted User',
+      recipientIdentifier,
+      address,
+      issuedAt: new Date().toISOString(),
+      effectiveFrom: new Date().toISOString(),
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/attestations')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .set('X-Request-Nonce', `nonce-${createUniqueSuffix()}`)
+      .set('X-Request-Timestamp', new Date().toISOString())
+      .send(attestationPayload)
+      .expect(201);
+
+    await upsertPartnerSecuritySettings(partner.id, {
+      enableEncryptedSubmission: true,
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/v1/resolution/resolve')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .send({
+        recipientIdentifierEncrypted: sealEncryptedField(
+          recipientIdentifier,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+        chain: 'ethereum',
+        asset: 'USDC',
+      })
+      .expect(201);
+
+    expect(response.body.data).toMatchObject({
+      verified: true,
+      address,
+      chain: 'ethereum',
+      asset: 'USDC',
+    });
+  });
+
+  it('accepts encrypted recipient identifiers for BYOK-configured partners on the current bridge path', async () => {
+    const partner = await createAttestationPartnerContext([
+      'attestations:write',
+      'resolution:read',
+    ]);
+    const recipientIdentifier = `byok@${partner.slug}`;
+    const address = randomEvmAddress();
+    const attestationPayload = createSignedAttestationPayload({
+      partner,
+      sequenceNumber: 1,
+      recipientExternalId: `recipient-${partner.slug}`,
+      recipientDisplayName: 'BYOK User',
+      recipientIdentifier,
+      address,
+      issuedAt: new Date().toISOString(),
+      effectiveFrom: new Date().toISOString(),
+    });
+
+    await request(app.getHttpServer())
+      .post('/v1/attestations')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .set('X-Request-Nonce', `nonce-${createUniqueSuffix()}`)
+      .set('X-Request-Timestamp', new Date().toISOString())
+      .send(attestationPayload)
+      .expect(201);
+
+    await upsertPartnerSecuritySettings(partner.id, {
+      enableEncryptedSubmission: true,
+      enterpriseByokEnabled: true,
+      customerKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/example',
+      customerKeyStatus: 'ACTIVE',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/v1/resolution/resolve')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .send({
+        recipientIdentifierEncrypted: sealEncryptedField(
+          recipientIdentifier,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+        chain: 'ethereum',
+        asset: 'USDC',
+      })
+      .expect(201);
+
+    expect(response.body.data).toMatchObject({
+      verified: true,
+      address,
+      chain: 'ethereum',
+      asset: 'USDC',
+    });
+  });
+
+  it('rejects encrypted recipient identifiers when encrypted submission is disabled', async () => {
+    const partner = await createPartnerContext(['resolution:read']);
+
+    await request(app.getHttpServer())
+      .post('/v1/resolution/resolve')
+      .set('Authorization', `Bearer ${partner.credentialSecret}`)
+      .send({
+        recipientIdentifierEncrypted: sealEncryptedField(
+          `disabled@${partner.slug}`,
+          encryptedSubmissionMasterSecret,
+          'v1',
+        ),
+        chain: 'ethereum',
+        asset: 'USDC',
+      })
+      .expect(403);
   });
 
   it('rejects replayed attestation requests that reuse a nonce', async () => {
@@ -370,6 +499,31 @@ describe('Request hardening (e2e)', () => {
     };
   }
 
+  async function upsertPartnerSecuritySettings(
+    partnerId: string,
+    overrides: {
+      enableEncryptedSubmission?: boolean;
+      enterpriseByokEnabled?: boolean;
+      customerKeyArn?: string | null;
+      customerKeyStatus?: string | null;
+    },
+  ) {
+    await prismaClient.partnerSecuritySettings.upsert({
+      where: {
+        partnerId,
+      },
+      update: overrides,
+      create: {
+        partnerId,
+        ipAllowlist: [],
+        enableEncryptedSubmission: overrides.enableEncryptedSubmission ?? false,
+        enterpriseByokEnabled: overrides.enterpriseByokEnabled ?? false,
+        customerKeyArn: overrides.customerKeyArn ?? null,
+        customerKeyStatus: overrides.customerKeyStatus ?? null,
+      },
+    });
+  }
+
   async function seedResolutionRequests(params: {
     partnerId: string;
     totalRequests: number;
@@ -468,4 +622,31 @@ function createUniqueSuffix(): string {
 
 function randomEvmAddress(): string {
   return `0x${randomBytes(20).toString('hex')}`;
+}
+
+function sealEncryptedField(
+  value: string,
+  masterSecret: string,
+  keyId: string,
+) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(
+    'aes-256-gcm',
+    createHash('sha256')
+      .update(`vervet:encrypted-submission:${keyId}:${masterSecret}`)
+      .digest(),
+    iv,
+  );
+  const ciphertext = Buffer.concat([
+    cipher.update(value, 'utf8'),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+
+  return {
+    alg: 'AES-256-GCM' as const,
+    keyId,
+    iv: iv.toString('base64url'),
+    ciphertext: Buffer.concat([ciphertext, authTag]).toString('base64url'),
+  };
 }

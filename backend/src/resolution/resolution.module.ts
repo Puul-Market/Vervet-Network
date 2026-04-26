@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { NormalizationModule } from '../common/normalization/normalization.module';
+import { EncryptedSubmissionModule } from '../common/security/encrypted-submission.module';
 import { PartnersModule } from '../partners/partners.module';
 import { RecipientsModule } from '../recipients/recipients.module';
 import { RequestHardeningModule } from '../security/request-hardening.module';
@@ -12,6 +13,7 @@ import { ResolutionService } from './resolution.service';
   imports: [
     AuditModule,
     AuthModule,
+    EncryptedSubmissionModule,
     NormalizationModule,
     PartnersModule,
     RecipientsModule,
