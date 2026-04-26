@@ -139,7 +139,7 @@ function createPrismaServiceMock(
 ) {
   return {
     partnerSecuritySettings: {
-      findUnique: jest.fn(async () => settings),
+      findUnique: jest.fn(() => Promise.resolve(settings)),
     },
   };
 }

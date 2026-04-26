@@ -220,7 +220,14 @@ describe('Request hardening (e2e)', () => {
       })
       .expect(201);
 
-    expect(response.body.data).toMatchObject({
+    const payload = readApiObject<{
+      verified: boolean;
+      address: string | null;
+      chain: string | null;
+      asset: string | null;
+    }>(response.body as unknown);
+
+    expect(payload).toMatchObject({
       verified: true,
       address,
       chain: 'ethereum',
@@ -275,7 +282,14 @@ describe('Request hardening (e2e)', () => {
       })
       .expect(201);
 
-    expect(response.body.data).toMatchObject({
+    const payload = readApiObject<{
+      verified: boolean;
+      address: string | null;
+      chain: string | null;
+      asset: string | null;
+    }>(response.body as unknown);
+
+    expect(payload).toMatchObject({
       verified: true,
       address,
       chain: 'ethereum',
@@ -337,7 +351,14 @@ describe('Request hardening (e2e)', () => {
       )
       .expect(201);
 
-    expect(attestationResponse.body.data).toMatchObject({
+    const attestation = readApiObject<{
+      recipientIdentifier: string;
+      address: string;
+      chain: string;
+      asset: string;
+    }>(attestationResponse.body as unknown);
+
+    expect(attestation).toMatchObject({
       recipientIdentifier,
       address,
       chain: 'ethereum',
@@ -354,7 +375,14 @@ describe('Request hardening (e2e)', () => {
       })
       .expect(201);
 
-    expect(resolutionResponse.body.data).toMatchObject({
+    const resolution = readApiObject<{
+      verified: boolean;
+      address: string | null;
+      chain: string | null;
+      asset: string | null;
+    }>(resolutionResponse.body as unknown);
+
+    expect(resolution).toMatchObject({
       verified: true,
       address,
       chain: 'ethereum',
@@ -411,7 +439,14 @@ describe('Request hardening (e2e)', () => {
       })
       .expect(201);
 
-    expect(resolutionResponse.body.data).toMatchObject({
+    const resolution = readApiObject<{
+      verified: boolean;
+      address: string | null;
+      chain: string | null;
+      asset: string | null;
+    }>(resolutionResponse.body as unknown);
+
+    expect(resolution).toMatchObject({
       verified: true,
       address,
       chain: 'ethereum',
@@ -762,6 +797,14 @@ function createSignedAttestationPayload(params: {
     ...payload,
     signature,
   };
+}
+
+function readApiObject<T>(value: unknown): T {
+  if (typeof value === 'object' && value !== null && 'data' in value) {
+    return value.data as T;
+  }
+
+  throw new Error('Expected API response payload with a data field.');
 }
 
 function toEncryptedAttestationPayload(
